@@ -50,10 +50,17 @@ export class MemStorage implements IStorage {
     const musicGeneration: MusicGeneration = {
       ...generation,
       id,
+      userId: generation.userId || null,
+      style: generation.style || null,
+      title: generation.title || null,
+      model: generation.model || "V5",
+      instrumental: generation.instrumental ?? false,
+      duration: generation.duration || null,
       status: "pending",
       audioUrl: null,
       imageUrl: null,
       taskId: null,
+      metadata: null,
       createdAt: new Date(),
       completedAt: null,
     };
@@ -87,6 +94,9 @@ export class MemStorage implements IStorage {
     const imageGeneration: ImageGeneration = {
       ...generation,
       id,
+      userId: generation.userId || null,
+      title: generation.title || null,
+      musicGenerationId: generation.musicGenerationId || null,
       status: "pending",
       imageUrl: null,
       createdAt: new Date(),

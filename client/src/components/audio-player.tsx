@@ -214,8 +214,8 @@ export function AudioPlayer({ musicGeneration, className }: AudioPlayerProps) {
                   `${musicGeneration.style.charAt(0).toUpperCase()}${musicGeneration.style.slice(1).replace('-', ' ')}` : 
                   'Generated Music'
                 }
-                {musicGeneration.metadata?.bpm && ` • ${musicGeneration.metadata.bpm} BPM`}
-                {musicGeneration.metadata?.key && ` • ${musicGeneration.metadata.key}`}
+                {musicGeneration.metadata && typeof musicGeneration.metadata === 'object' && 'bpm' in musicGeneration.metadata ? <span> • {String((musicGeneration.metadata as any).bpm)} BPM</span> : null}
+                {musicGeneration.metadata && typeof musicGeneration.metadata === 'object' && 'key' in musicGeneration.metadata ? <span> • {String((musicGeneration.metadata as any).key)}</span> : null}
               </p>
               <div className="flex flex-wrap gap-2">
                 {musicGeneration.duration && (

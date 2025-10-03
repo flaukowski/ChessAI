@@ -47,6 +47,10 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
       quality: "standard",
     });
 
+    if (!response.data || !response.data[0]) {
+      throw new Error("No image data returned from OpenAI");
+    }
+
     return {
       url: response.data[0].url!,
       revisedPrompt: response.data[0].revised_prompt || undefined,

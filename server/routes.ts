@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         style: validatedData.style || undefined,
         title: validatedData.title || undefined,
         customMode: validatedData.customMode,
-        instrumental: validatedData.instrumental,
+        instrumental: validatedData.instrumental || false,
         model: validatedData.model as any,
         negativeTags: validatedData.negativeTags,
         vocalGender: validatedData.vocalGender,
