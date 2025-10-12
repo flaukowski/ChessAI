@@ -5,10 +5,15 @@ import { insertMusicGenerationSchema, insertImageGenerationSchema } from "@share
 import { generateMusic, checkGenerationStatus, downloadAudio } from "./services/suno";
 import { generateImage, enhanceMusicPrompt } from "./services/openai";
 import { pool } from "./db";
+import { metrics } from "./metrics";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/metrics", (_req: Request, res: Response) => {
+    res.json(metrics.snapshot());
   });
 
   app.get("/ready", async (_req: Request, res: Response) => {

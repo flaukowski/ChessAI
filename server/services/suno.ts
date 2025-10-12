@@ -1,4 +1,5 @@
 import axios from "axios";
+import { metrics } from "../metrics";
 
 // Using SunoAPI.org as the third-party provider for Suno API access
 const SUNO_API_URL = "https://api.sunoapi.org/api/v1";
@@ -109,13 +110,13 @@ export async function generateMusic(params: SunoGenerationParams): Promise<SunoG
       weirdnessConstraint: params.weirdnessConstraint || 0.50,
     };
 
-    const response = await withRetry(() => sunoLimiter.run(() => axios.post(`${SUNO_API_URL}/generate`, requestData, {
+    const response = await metrics.timeAsync("suno.generate", () => withRetry(() => sunoLimiter.run(() => axios.post(`${SUNO_API_URL}/generate`, requestData, {
       headers: {
         'Authorization': `Bearer ${SUNO_API_KEY}`,
         'Content-Type': 'application/json'
       },
       timeout: 30000, // 30 second timeout
-    })));
+    }))));
 
     const data = (response as any).data;
     
@@ -139,12 +140,12 @@ export async function generateMusic(params: SunoGenerationParams): Promise<SunoG
 
 export async function checkGenerationStatus(taskId: string): Promise<SunoGenerationResult> {
   try {
-    const response = await withRetry(() => sunoLimiter.run(() => axios.get(`${SUNO_API_URL}/status/${taskId}`, {
+    const response = await metrics.timeAsync("suno.status", () => withRetry(() => sunoLimiter.run(() => axios.get(`${SUNO_API_URL}/status/${taskId}`, {
       headers: {
         'Authorization': `Bearer ${SUNO_API_KEY}`,
       },
       timeout: 10000,
-    })));
+    }))));
 
     const data = (response as any).data;
     
@@ -174,10 +175,13 @@ export async function checkGenerationStatus(taskId: string): Promise<SunoGenerat
 
 export async function downloadAudio(audioUrl: string): Promise<Buffer> {
   try {
-    const response = await withRetry(() => sunoLimiter.run(() => axios.get(audioUrl, {
-      responseType: 'arraybuffer',
-      timeout: 60000, // 60 second timeout for downloads
-    })), { attempts: 2 });
+    const response = await metrics.timeAsync("suno.download", () => withRetry(
+      () => sunoLimiter.run(() => axios.get(audioUrl, {
+        responseType: 'arraybuffer',
+        timeout: 60000,
+      })),
+      { attempts: 2 }
+    ));
     
     return Buffer.from((response as any).data);
   } catch (error) {

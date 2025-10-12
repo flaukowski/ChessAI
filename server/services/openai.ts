@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { metrics } from "../metrics";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -84,7 +85,7 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
     let enhancedPrompt = params.prompt;
     
     if (params.musicContext) {
-      const enhancementResponse: any = await withRetry(() => openaiLimiter.run(() => openai.chat.completions.create({
+      const enhancementResponse: any = await metrics.timeAsync("openai.enhance_prompt", () => withRetry(() => openaiLimiter.run(() => openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
@@ -97,18 +98,18 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
           }
         ],
         max_completion_tokens: 100,
-      })));
+      }))));
 
       enhancedPrompt = enhancementResponse.choices[0].message.content || params.prompt;
     }
 
-    const response: any = await withRetry(() => openaiLimiter.run(() => openai.images.generate({
+    const response: any = await metrics.timeAsync("openai.image_generate", () => withRetry(() => openaiLimiter.run(() => openai.images.generate({
       model: "dall-e-3",
       prompt: enhancedPrompt,
       n: 1,
       size: "1024x1024",
       quality: "standard",
-    })));
+    }))));
 
     if (!response.data || !response.data[0]) {
       throw new Error("No image data returned from OpenAI");
@@ -126,7 +127,7 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
 
 export async function enhanceMusicPrompt(prompt: string): Promise<string> {
   try {
-    const response: any = await withRetry(() => openaiLimiter.run(() => openai.chat.completions.create({
+    const response: any = await metrics.timeAsync("openai.enhance_music_prompt", () => withRetry(() => openaiLimiter.run(() => openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -139,7 +140,7 @@ export async function enhanceMusicPrompt(prompt: string): Promise<string> {
         }
       ],
       max_completion_tokens: 150,
-    })));
+    }))));
 
     return response.choices[0].message.content || prompt;
   } catch (error: any) {
