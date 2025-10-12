@@ -4,6 +4,27 @@ import axios from "axios";
 const SUNO_API_URL = "https://api.sunoapi.org/api/v1";
 const SUNO_API_KEY = process.env.SUNO_API_KEY || process.env.SUNO_API_KEY_ENV_VAR || "default_key";
 
+async function withRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; baseDelayMs?: number } = {}): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseDelayMs ?? 500;
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const status = (err?.response?.status as number) || 0;
+      // Retry on 429/5xx/network
+      const retriable = status === 0 || status === 429 || (status >= 500 && status < 600);
+      if (!retriable || i === attempts - 1) break;
+      const jitter = Math.floor(Math.random() * 150);
+      const delay = base * Math.pow(2, i) + jitter;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export interface SunoGenerationParams {
   prompt: string;
   style?: string;
@@ -46,15 +67,15 @@ export async function generateMusic(params: SunoGenerationParams): Promise<SunoG
       weirdnessConstraint: params.weirdnessConstraint || 0.50,
     };
 
-    const response = await axios.post(`${SUNO_API_URL}/generate`, requestData, {
+    const response = await withRetry(() => axios.post(`${SUNO_API_URL}/generate`, requestData, {
       headers: {
         'Authorization': `Bearer ${SUNO_API_KEY}`,
         'Content-Type': 'application/json'
       },
       timeout: 30000, // 30 second timeout
-    });
+    }));
 
-    const data = response.data;
+    const data = (response as any).data;
     
     return {
       taskId: data.taskId || data.id,
@@ -76,14 +97,14 @@ export async function generateMusic(params: SunoGenerationParams): Promise<SunoG
 
 export async function checkGenerationStatus(taskId: string): Promise<SunoGenerationResult> {
   try {
-    const response = await axios.get(`${SUNO_API_URL}/status/${taskId}`, {
+    const response = await withRetry(() => axios.get(`${SUNO_API_URL}/status/${taskId}`, {
       headers: {
         'Authorization': `Bearer ${SUNO_API_KEY}`,
       },
       timeout: 10000,
-    });
+    }));
 
-    const data = response.data;
+    const data = (response as any).data;
     
     return {
       taskId: taskId,
@@ -111,12 +132,12 @@ export async function checkGenerationStatus(taskId: string): Promise<SunoGenerat
 
 export async function downloadAudio(audioUrl: string): Promise<Buffer> {
   try {
-    const response = await axios.get(audioUrl, {
+    const response = await withRetry(() => axios.get(audioUrl, {
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout for downloads
-    });
+    }), { attempts: 2 });
     
-    return Buffer.from(response.data);
+    return Buffer.from((response as any).data);
   } catch (error) {
     console.error("Audio download error:", error);
     throw new Error(`Failed to download audio: ${error instanceof Error ? error.message : 'Unknown error'}`);

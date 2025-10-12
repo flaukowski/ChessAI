@@ -5,6 +5,27 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key" 
 });
 
+async function withRetry<T>(fn: () => Promise<T>, opts: { attempts?: number; baseDelayMs?: number } = {}): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseDelayMs ?? 500;
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      // Retry on rate limits and server/network errors when possible
+      const status = (err?.status as number) || (err?.response?.status as number) || 0;
+      const retriable = status === 0 || status === 408 || status === 429 || (status >= 500 && status < 600);
+      if (!retriable || i === attempts - 1) break;
+      const jitter = Math.floor(Math.random() * 150);
+      const delay = base * Math.pow(2, i) + jitter;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export interface GenerateImageParams {
   prompt: string;
   musicContext?: string;
@@ -21,7 +42,7 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
     let enhancedPrompt = params.prompt;
     
     if (params.musicContext) {
-      const enhancementResponse = await openai.chat.completions.create({
+      const enhancementResponse = await withRetry(() => openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
@@ -34,18 +55,18 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
           }
         ],
         max_completion_tokens: 100,
-      });
+      })) as any;
 
-      enhancedPrompt = enhancementResponse.choices[0].message.content || params.prompt;
+      enhancedPrompt = (enhancementResponse as any).choices[0].message.content || params.prompt;
     }
 
-    const response = await openai.images.generate({
+    const response = await withRetry(() => openai.images.generate({
       model: "dall-e-3",
       prompt: enhancedPrompt,
       n: 1,
       size: "1024x1024",
       quality: "standard",
-    });
+    })) as any;
 
     if (!response.data || !response.data[0]) {
       throw new Error("No image data returned from OpenAI");
@@ -55,7 +76,7 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
       url: response.data[0].url!,
       revisedPrompt: response.data[0].revised_prompt || undefined,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("OpenAI image generation error:", error);
     throw new Error(`Failed to generate image: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -63,7 +84,7 @@ export async function generateImage(params: GenerateImageParams): Promise<ImageG
 
 export async function enhanceMusicPrompt(prompt: string): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await withRetry(() => openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -76,10 +97,10 @@ export async function enhanceMusicPrompt(prompt: string): Promise<string> {
         }
       ],
       max_completion_tokens: 150,
-    });
+    })) as any;
 
-    return response.choices[0].message.content || prompt;
-  } catch (error) {
+    return (response as any).choices[0].message.content || prompt;
+  } catch (error: any) {
     console.error("OpenAI prompt enhancement error:", error);
     return prompt; // Fallback to original prompt
   }

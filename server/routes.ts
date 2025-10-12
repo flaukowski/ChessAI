@@ -1,11 +1,24 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMusicGenerationSchema, insertImageGenerationSchema } from "@shared/schema";
 import { generateMusic, checkGenerationStatus, downloadAudio } from "./services/suno";
 import { generateImage, enhanceMusicPrompt } from "./services/openai";
+import { pool } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.get("/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok" });
+  });
+
+  app.get("/ready", async (_req: Request, res: Response) => {
+    try {
+      await pool.query("SELECT 1");
+      res.json({ ready: true });
+    } catch (err: any) {
+      res.status(503).json({ ready: false, message: err?.message || "DB not ready" });
+    }
+  });
   
   // Music Generation Routes
   app.post("/api/music/generate", async (req, res) => {
@@ -91,6 +104,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : "Failed to check status" 
       });
     }
+  });
+
+  app.get("/api/music/:id/events", async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    res.set({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    (res as any).flushHeaders?.();
+
+    const send = (event: string, data: any) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closed = false;
+    req.on("close", () => {
+      closed = true;
+      clearInterval(interval);
+    });
+
+    try {
+      const mg = await storage.getMusicGeneration(id);
+      if (!mg) {
+        send("error", { message: "Music generation not found" });
+        return res.end();
+      }
+      send("status", { id: mg.id, status: mg.status });
+    } catch (e: any) {
+      send("error", { message: e?.message || "Initialization error" });
+    }
+
+    const interval = setInterval(async () => {
+      if (closed) return;
+      try {
+        const music = await storage.getMusicGeneration(id);
+        if (!music) {
+          send("error", { message: "Music generation not found" });
+          clearInterval(interval);
+          return res.end();
+        }
+
+        if (music.taskId && music.status !== "completed" && music.status !== "failed") {
+          const sunoStatus = await checkGenerationStatus(music.taskId);
+          let updated = music;
+
+          if (sunoStatus.status === "completed") {
+            updated = (await storage.updateMusicGeneration(id, {
+              status: "completed",
+              audioUrl: sunoStatus.audioUrl,
+              imageUrl: sunoStatus.imageUrl,
+              duration: sunoStatus.duration,
+              metadata: sunoStatus.metadata,
+              completedAt: new Date(),
+            }))!;
+            send("status", updated);
+            clearInterval(interval);
+            return res.end();
+          } else {
+            updated = (await storage.updateMusicGeneration(id, {
+              status: sunoStatus.status,
+            }))!;
+            send("status", updated);
+          }
+        } else {
+          send("ping", { t: Date.now() });
+          if (music.status === "completed" || music.status === "failed") {
+            clearInterval(interval);
+            return res.end();
+          }
+        }
+      } catch (err: any) {
+        send("error", { message: err?.message || "Polling error" });
+      }
+    }, 2000);
   });
 
   app.get("/api/music/:id/download", async (req, res) => {
