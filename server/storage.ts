@@ -10,6 +10,7 @@ import {
   type InsertImageGeneration 
 } from "@shared/schema";
 import { db } from "./db";
+import { nanoid } from "nanoid";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
@@ -146,4 +147,88 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+class InMemoryStorage implements IStorage {
+  private users: User[] = [];
+  private music: MusicGeneration[] = [];
+  private images: ImageGeneration[] = [];
+
+  async getUser(id: string): Promise<User | undefined> {
+    return this.users.find(u => u.id === id);
+  }
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return this.users.find(u => u.username === username);
+  }
+  async createUser(user: InsertUser): Promise<User> {
+    const u = { id: nanoid(), username: user.username, password: user.password } as User;
+    this.users.push(u);
+    return u;
+  }
+
+  async createMusicGeneration(g: InsertMusicGeneration & { userId?: string }): Promise<MusicGeneration> {
+    const obj: MusicGeneration = {
+      id: nanoid(),
+      userId: g.userId ?? null as any,
+      title: g.title ?? null as any,
+      prompt: g.prompt,
+      style: g.style ?? null as any,
+      model: (g.model as any) ?? "V5",
+      instrumental: g.instrumental ?? false,
+      duration: g.duration ?? null as any,
+      status: "pending",
+      progress: 0,
+      statusDetail: null as any,
+      audioUrl: null as any,
+      imageUrl: null as any,
+      taskId: null as any,
+      metadata: null as any,
+      createdAt: new Date(),
+      completedAt: null as any,
+    };
+    this.music.push(obj);
+    return obj;
+  }
+  async getMusicGeneration(id: string): Promise<MusicGeneration | undefined> {
+    return this.music.find(m => m.id === id);
+  }
+  async updateMusicGeneration(id: string, updates: Partial<MusicGeneration>): Promise<MusicGeneration | undefined> {
+    const idx = this.music.findIndex(m => m.id === id);
+    if (idx === -1) return undefined;
+    this.music[idx] = { ...this.music[idx], ...updates };
+    return this.music[idx];
+  }
+  async getUserMusicGenerations(userId?: string, limit: number = 50): Promise<MusicGeneration[]> {
+    const arr = userId ? this.music.filter(m => m.userId === userId) : this.music;
+    return arr.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)).slice(0, limit);
+  }
+
+  async createImageGeneration(g: InsertImageGeneration & { userId?: string }): Promise<ImageGeneration> {
+    const obj: ImageGeneration = {
+      id: nanoid(),
+      userId: g.userId ?? null as any,
+      title: g.title ?? null as any,
+      prompt: g.prompt,
+      status: "pending",
+      imageUrl: null as any,
+      musicGenerationId: (g as any).musicGenerationId ?? null as any,
+      createdAt: new Date(),
+      completedAt: null as any,
+    };
+    this.images.push(obj);
+    return obj;
+  }
+  async getImageGeneration(id: string): Promise<ImageGeneration | undefined> {
+    return this.images.find(i => i.id === id);
+  }
+  async updateImageGeneration(id: string, updates: Partial<ImageGeneration>): Promise<ImageGeneration | undefined> {
+    const idx = this.images.findIndex(i => i.id === id);
+    if (idx === -1) return undefined;
+    this.images[idx] = { ...this.images[idx], ...updates };
+    return this.images[idx];
+  }
+  async getUserImageGenerations(userId?: string, limit: number = 50): Promise<ImageGeneration[]> {
+    const arr = userId ? this.images.filter(i => i.userId === userId) : this.images;
+    return arr.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)).slice(0, limit);
+  }
+}
+
+export const storage: IStorage = db ? new DatabaseStorage() : new InMemoryStorage();

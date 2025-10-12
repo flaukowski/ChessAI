@@ -13,8 +13,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/ready", async (_req: Request, res: Response) => {
     try {
-      await pool.query("SELECT 1");
-      res.json({ ready: true });
+      if (pool) {
+        await (pool as any).query("SELECT 1");
+        res.json({ ready: true });
+      } else {
+        if ((process.env.NODE_ENV || app.get("env")) === "development") {
+          res.json({ ready: true, mode: "in-memory" });
+        } else {
+          throw new Error("DB not configured");
+        }
+      }
     } catch (err: any) {
       res.status(503).json({ ready: false, message: err?.message || "DB not ready" });
     }
