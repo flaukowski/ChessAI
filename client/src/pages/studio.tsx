@@ -60,8 +60,8 @@ export default function Studio() {
         description: "Your track is being generated. This may take up to 2 minutes.",
       });
 
-      // Poll for completion
-      pollMusicStatus(musicGeneration.id);
+      // Stream live status via SSE with polling fallback
+      startMusicStatus(musicGeneration.id, musicGeneration.prompt ?? "");
 
     } catch (error) {
       console.error("Generation error:", error);
@@ -72,6 +72,44 @@ export default function Studio() {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const startMusicStatus = (musicId: string, originalPrompt: string) => {
+    try {
+      const es = new EventSource(`/api/music/${musicId}/events`);
+
+      const onStatus = (evt: MessageEvent) => {
+        try {
+          const updated: MusicGeneration = JSON.parse((evt as MessageEvent).data);
+          setCurrentMusic(updated);
+          if (updated.status === "completed") {
+            es.close();
+            if (updated.prompt || originalPrompt) {
+              generatePairedImage(updated);
+            }
+          } else if (updated.status === "failed") {
+            es.close();
+            toast({
+              title: "Generation Failed",
+              description: "The music generation encountered an error.",
+              variant: "destructive",
+            });
+          }
+        } catch (e) {
+          // swallow parse errors
+        }
+      };
+
+      es.addEventListener("status", onStatus as EventListener);
+      es.addEventListener("error", () => {
+        es.close();
+        // fallback to polling if SSE fails
+        pollMusicStatus(musicId);
+      });
+    } catch (_e) {
+      // If EventSource unsupported, fallback to polling
+      pollMusicStatus(musicId);
     }
   };
 
