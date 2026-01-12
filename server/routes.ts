@@ -7,8 +7,12 @@ import { generateImage, enhanceMusicPrompt } from "./services/openai";
 import { pool } from "./db";
 import { metrics } from "./metrics";
 import billingRoutes from "./billing";
+import authRoutes from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth routes (Space Child Auth integration)
+  app.use("/api/space-child-auth", authRoutes);
+  
   // Billing routes (MoneyDevKit integration)
   app.use("/api/billing", billingRoutes);
   app.get("/health", (_req: Request, res: Response) => {
