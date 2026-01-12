@@ -1,10 +1,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Home, Upload, User, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Menu, Home, Upload, User, Plus, Waves, Sparkles, Music } from "lucide-react";
 import { PromptSidebar, type GenerationParams } from "@/components/prompt-sidebar";
 import { AudioPlayer } from "@/components/audio-player";
 import { ImageGallery } from "@/components/image-gallery";
 import { GenerationHistory } from "@/components/generation-history";
+import { EffectsRack } from "@/components/effects-rack";
+import { AudioVisualizer } from "@/components/audio-visualizer";
+import { AIEffectSuggester } from "@/components/ai-effect-suggester";
+import { AudioInput } from "@/components/audio-input";
+import { useAudioDSP } from "@/hooks/use-audio-dsp";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Progress } from "@/components/ui/progress";
@@ -14,7 +20,24 @@ export default function Studio() {
   const [currentMusic, setCurrentMusic] = useState<MusicGeneration | null>(null);
   const [images, setImages] = useState<ImageGeneration[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeView, setActiveView] = useState<'generate' | 'dsp'>('generate');
+  const [currentGenre, setCurrentGenre] = useState('indie-pop');
   const { toast } = useToast();
+  
+  // DSP Hook for real-time audio processing
+  const {
+    isInitialized: dspInitialized,
+    inputSource,
+    volume,
+    effects,
+    analyser,
+    initialize: initializeDSP,
+    connectAudioFile,
+    connectMicrophone,
+    disconnectMicrophone,
+    addEffect,
+    setVolume,
+  } = useAudioDSP();
 
   // Load initial data
   useEffect(() => {
@@ -242,80 +265,144 @@ export default function Studio() {
           </div>
         </header>
 
-        {/* Content Container */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-          {/* Audio Player Section */}
-          <AudioPlayer 
-            musicGeneration={currentMusic}
-            className="hover:shadow-xl transition-shadow" 
-          />
-
-          {currentMusic && currentMusic.status !== "completed" && currentMusic.status !== "failed" && (
-            <div className="p-4 rounded-lg border border-border bg-card">
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span>Generating music…</span>
-                <span>{Math.max(0, Math.min(100, currentMusic.progress || 0))}%</span>
-              </div>
-              <Progress value={Math.max(0, Math.min(100, currentMusic.progress || 0))} />
-              {currentMusic.statusDetail && (
-                <div className="mt-2 text-xs text-muted-foreground">{currentMusic.statusDetail}</div>
-              )}
-            </div>
-          )}
-
-          {/* Image Gallery Section */}
-          <ImageGallery 
-            images={images}
-            className="hover:shadow-xl transition-shadow"
-          />
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-3 gap-4">
-            <Button 
-              variant="outline" 
-              className="p-4 h-auto text-left group hover:border-primary/50 hover:bg-primary/5"
-              data-testid="button-remix"
-            >
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-primary/10 to-purple-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <div className="w-6 h-6 bg-primary/20 rounded-full"></div>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">Remix Track</h3>
-                <p className="text-xs text-muted-foreground">Create variations of your song</p>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline" 
-              className="p-4 h-auto text-left group hover:border-accent/50 hover:bg-accent/5"
-              data-testid="button-vocals"
-            >
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-accent/10 to-blue-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <div className="w-6 h-6 bg-accent/20 rounded-full"></div>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">Add Vocals</h3>
-                <p className="text-xs text-muted-foreground">Generate vocal layers</p>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline" 
-              className="p-4 h-auto text-left group hover:border-primary/50 hover:bg-primary/5"
-              data-testid="button-video"
-            >
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-primary/10 to-purple-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <div className="w-6 h-6 bg-primary/20 rounded-full"></div>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">Create Video</h3>
-                <p className="text-xs text-muted-foreground">Sync visuals with music</p>
-              </div>
-            </Button>
+        {/* Content Container with View Tabs */}
+        <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'generate' | 'dsp')} className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-6 pt-4 border-b border-border">
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="generate" className="gap-2">
+                <Music className="w-4 h-4" />
+                AI Generate
+              </TabsTrigger>
+              <TabsTrigger value="dsp" className="gap-2">
+                <Waves className="w-4 h-4" />
+                DSP Effects
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-        </div>
+          {/* AI Generation View */}
+          <TabsContent value="generate" className="flex-1 overflow-y-auto p-6 space-y-6 m-0">
+            {/* Audio Player Section */}
+            <AudioPlayer 
+              musicGeneration={currentMusic}
+              className="hover:shadow-xl transition-shadow" 
+            />
+
+            {currentMusic && currentMusic.status !== "completed" && currentMusic.status !== "failed" && (
+              <div className="p-4 rounded-lg border border-border bg-card">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span>Generating music…</span>
+                  <span>{Math.max(0, Math.min(100, currentMusic.progress || 0))}%</span>
+                </div>
+                <Progress value={Math.max(0, Math.min(100, currentMusic.progress || 0))} />
+                {currentMusic.statusDetail && (
+                  <div className="mt-2 text-xs text-muted-foreground">{currentMusic.statusDetail}</div>
+                )}
+              </div>
+            )}
+
+            {/* Image Gallery Section */}
+            <ImageGallery 
+              images={images}
+              className="hover:shadow-xl transition-shadow"
+            />
+
+            {/* Quick Actions */}
+            <div className="grid grid-cols-3 gap-4">
+              <Button 
+                variant="outline" 
+                className="p-4 h-auto text-left group hover:border-primary/50 hover:bg-primary/5"
+                data-testid="button-remix"
+              >
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-primary/10 to-purple-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <div className="w-6 h-6 bg-primary/20 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Remix Track</h3>
+                  <p className="text-xs text-muted-foreground">Create variations of your song</p>
+                </div>
+              </Button>
+
+              <Button 
+                variant="outline" 
+                className="p-4 h-auto text-left group hover:border-accent/50 hover:bg-accent/5"
+                onClick={() => setActiveView('dsp')}
+                data-testid="button-dsp"
+              >
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-cyan-500/10 to-purple-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Waves className="w-6 h-6 text-cyan-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">DSP Effects</h3>
+                  <p className="text-xs text-muted-foreground">Real-time audio processing</p>
+                </div>
+              </Button>
+
+              <Button 
+                variant="outline" 
+                className="p-4 h-auto text-left group hover:border-primary/50 hover:bg-primary/5"
+                data-testid="button-video"
+              >
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-primary/10 to-purple-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <div className="w-6 h-6 bg-primary/20 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">Create Video</h3>
+                  <p className="text-xs text-muted-foreground">Sync visuals with music</p>
+                </div>
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* DSP Effects View */}
+          <TabsContent value="dsp" className="flex-1 overflow-y-auto p-6 m-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Input & Visualizer */}
+              <div className="space-y-4">
+                <AudioInput
+                  onAudioElementReady={connectAudioFile}
+                  onMicrophoneConnect={connectMicrophone}
+                  onMicrophoneDisconnect={disconnectMicrophone}
+                  inputSource={inputSource}
+                  volume={volume}
+                  onVolumeChange={setVolume}
+                />
+                
+                <AudioVisualizer
+                  analyser={analyser}
+                  isPlaying={inputSource !== null}
+                />
+
+                <AIEffectSuggester
+                  analyser={analyser}
+                  currentGenre={currentGenre}
+                  onApplySuggestion={(type, params) => {
+                    addEffect(type);
+                  }}
+                />
+              </div>
+
+              {/* Right Column - Effects Rack */}
+              <div>
+                <EffectsRack />
+              </div>
+            </div>
+
+            {/* DSP Info Banner */}
+            <div className="mt-6 p-4 rounded-lg border border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 to-purple-500/5">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-cyan-500 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">AudioNoise DSP Engine</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Real-time audio processing powered by algorithms ported from C-based guitar pedal effects. 
+                    Features biquad filters, echo, flanger, phaser, and LFO modulation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Right Sidebar - History */}
