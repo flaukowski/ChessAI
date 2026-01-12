@@ -6,8 +6,11 @@ import { generateMusic, checkGenerationStatus, downloadAudio } from "./services/
 import { generateImage, enhanceMusicPrompt } from "./services/openai";
 import { pool } from "./db";
 import { metrics } from "./metrics";
+import billingRoutes from "./billing";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Billing routes (MoneyDevKit integration)
+  app.use("/api/billing", billingRoutes);
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
