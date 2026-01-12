@@ -16,8 +16,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Music, Loader2, Eye, EyeOff, Mail, CheckCircle } from "lucide-react";
+import { Loader2, Eye, EyeOff, Mail, CheckCircle } from "lucide-react";
 import { forgotPassword, resendVerification } from "@/lib/space-child-auth";
+import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_1768261396578.png";
 
 interface AuthModalProps {
   open: boolean;
@@ -163,7 +164,7 @@ export function SpaceChildAuthModal({ open, onOpenChange }: AuthModalProps) {
         <DialogContent className="sm:max-w-[400px] bg-slate-900 border-cyan-500/20">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-white">
-              {view === "forgot-sent" ? <CheckCircle className="w-5 h-5 text-green-400" /> : <Music className="w-5 h-5 text-cyan-400" />}
+              {view === "forgot-sent" ? <CheckCircle className="w-5 h-5 text-green-400" /> : <img src={alienOctopusLogo} alt="" className="w-6 h-6 object-contain" />}
               {view === "forgot-sent" ? "Check Your Email" : "Reset Password"}
             </DialogTitle>
           </DialogHeader>
@@ -199,7 +200,7 @@ export function SpaceChildAuthModal({ open, onOpenChange }: AuthModalProps) {
       <DialogContent className="sm:max-w-[400px] bg-slate-900 border-cyan-500/20">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
-            <Music className="w-5 h-5 text-cyan-400" />
+            <img src={alienOctopusLogo} alt="" className="w-6 h-6 object-contain" />
             SonicVision Auth
           </DialogTitle>
           <DialogDescription className="text-gray-400">
