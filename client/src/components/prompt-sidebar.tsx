@@ -79,9 +79,9 @@ export function PromptSidebar({ onGenerate, isGenerating = false }: PromptSideba
           </div>
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-500 to-purple-600 bg-clip-text text-transparent">
-              AudioNoise
+              SonicVision
             </h1>
-            <p className="text-xs text-muted-foreground">AI + DSP Music Fusion</p>
+            <p className="text-xs text-muted-foreground">Powered by AudioNoise DSP</p>
           </div>
         </div>
       </div>
