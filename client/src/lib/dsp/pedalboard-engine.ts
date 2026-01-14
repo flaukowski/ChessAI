@@ -81,7 +81,8 @@ export class PedalboardEngine {
   private stateCallbacks: StateChangeCallback[] = [];
   private levelsCallbacks: LevelsChangeCallback[] = [];
   private mediaStream: MediaStream | null = null;
-  private mediaElementSourceCreated = false;
+  private mediaElementSource: MediaElementAudioSourceNode | null = null;
+  private lastConnectedElement: HTMLAudioElement | null = null;
 
   /**
    * Initialize the audio context and load worklets
@@ -149,11 +150,14 @@ export class PedalboardEngine {
     // Disconnect existing source
     this.disconnectSource();
 
-    // Create source only once per element
-    if (!this.mediaElementSourceCreated) {
-      this.sourceNode = this.context.createMediaElementSource(element);
-      this.mediaElementSourceCreated = true;
+    // Create new source if element changed, or reuse existing one
+    // Note: MediaElementAudioSourceNode can only be created once per element
+    if (this.lastConnectedElement !== element) {
+      this.mediaElementSource = this.context.createMediaElementSource(element);
+      this.lastConnectedElement = element;
     }
+    
+    this.sourceNode = this.mediaElementSource;
 
     this.rebuildAudioGraph();
     await this.resume();
@@ -195,7 +199,9 @@ export class PedalboardEngine {
    * Disconnect the current source
    */
   disconnectSource(): void {
-    if (this.sourceNode && !this.mediaElementSourceCreated) {
+    // Don't disconnect MediaElementSource - it can be reused
+    // Only disconnect if it's a microphone stream source
+    if (this.sourceNode && this.sourceNode !== this.mediaElementSource) {
       this.sourceNode.disconnect();
       this.sourceNode = null;
     }
