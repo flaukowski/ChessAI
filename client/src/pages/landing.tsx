@@ -74,7 +74,11 @@ export default function Landing() {
       <UpdateBanner />
       
       {/* Auth Modal */}
-      <SpaceChildAuthModal open={authOpen} onOpenChange={setAuthOpen} />
+      <SpaceChildAuthModal 
+        open={authOpen} 
+        onOpenChange={setAuthOpen} 
+        onSuccess={() => navigate('/studio')}
+      />
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center">

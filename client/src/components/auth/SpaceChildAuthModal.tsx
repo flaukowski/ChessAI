@@ -23,11 +23,12 @@ import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_17682613
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 type ModalView = "auth" | "verification-pending" | "forgot-password" | "forgot-sent";
 
-export function SpaceChildAuthModal({ open, onOpenChange }: AuthModalProps) {
+export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
   const { login, register, error: authError } = useSpaceChildAuth();
   const [view, setView] = useState<ModalView>("auth");
   const [tab, setTab] = useState<"login" | "register">("login");
@@ -49,6 +50,7 @@ export function SpaceChildAuthModal({ open, onOpenChange }: AuthModalProps) {
       await login({ email, password });
       onOpenChange(false);
       resetForm();
+      onSuccess?.();
     } catch (err: any) {
       if (err.requiresVerification) {
         setPendingEmail(email);
@@ -81,6 +83,7 @@ export function SpaceChildAuthModal({ open, onOpenChange }: AuthModalProps) {
       } else {
         onOpenChange(false);
         resetForm();
+        onSuccess?.();
       }
     } catch (err: any) {
       setError(err.message);
