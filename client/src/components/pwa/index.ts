@@ -1,5 +1,5 @@
 /**
- * SonicVision PWA Components
+ * AudioNoise Web PWA Components
  * Export all PWA-related components for easy importing
  */
 
