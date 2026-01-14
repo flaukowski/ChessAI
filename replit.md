@@ -8,6 +8,12 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+- **January 2026**: Added BassPurr bass harmonics generator effect
+  - Ported from firmware C implementation
+  - Three signal paths: fundamental (HPF), even harmonics (rectification), odd harmonics (clipping)
+  - 5-step tone control for harmonic filter cutoff
+  - Soft limiter output stage
+
 - **January 2026**: Refactored from SonicVision (AI music/image generation) to AudioNoise Web (DSP effects focus)
   - Removed Suno AI music generation and OpenAI image generation
   - Rebuilt Studio page with DSP effects rack, audio visualization, and Bluetooth routing
@@ -76,6 +82,14 @@ Preferred communication style: Simple, everyday language.
 - `echo.ts`: Delay-based echo with feedback
 - `flanger.ts`: LFO-modulated delay for flanging effect
 - `phaser.ts`: Multi-stage all-pass filter phaser
+
+**AudioWorklet Effects** (`worklet-effects.ts`, `public/worklets/effect-processor.js`):
+- EQ: 3-band parametric equalizer (low shelf, mid peak, high shelf)
+- Distortion: Soft clip, hard clip, and tube saturation modes
+- Delay: Tempo-synced delay with feedback and damping
+- Chorus: Multi-voice modulated delay chorus
+- Compressor: RMS-based dynamics compressor
+- BassPurr: Bass harmonics generator with fundamental/even/odd paths
 
 **Filters** (`biquad.ts`):
 - Biquad filter implementation (lowpass, highpass, bandpass, notch, allpass)
