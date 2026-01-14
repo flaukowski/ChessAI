@@ -95,6 +95,17 @@ export class PedalboardEngine {
     // Load AudioWorklet processors
     await loadEffectWorklets(this.context);
 
+    // Verify worklets are loaded by checking if we can create a node
+    // This is a safety check to prevent the race condition
+    try {
+      const probeNode = new AudioWorkletNode(this.context, 'level-meter-processor');
+      probeNode.disconnect();
+    } catch (e) {
+      console.warn('Worklets not fully ready, retrying in 100ms...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return this.initialize();
+    }
+
     // Create gain nodes
     this.inputGainNode = this.context.createGain();
     this.outputGainNode = this.context.createGain();

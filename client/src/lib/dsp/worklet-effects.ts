@@ -60,18 +60,24 @@ export interface BassPurrParams {
 
 export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams;
 
-let workletLoaded = false;
+let workletLoadingPromise: Promise<void> | null = null;
 
 export async function loadEffectWorklets(context: AudioContext): Promise<void> {
   if (workletLoaded) return;
+  if (workletLoadingPromise) return workletLoadingPromise;
 
-  try {
-    await context.audioWorklet.addModule('/worklets/effect-processor.js');
-    workletLoaded = true;
-  } catch (error) {
-    console.error('Failed to load effect worklets:', error);
-    throw error;
-  }
+  workletLoadingPromise = (async () => {
+    try {
+      await context.audioWorklet.addModule('/worklets/effect-processor.js');
+      workletLoaded = true;
+    } catch (error) {
+      console.error('Failed to load effect worklets:', error);
+      workletLoadingPromise = null;
+      throw error;
+    }
+  })();
+
+  return workletLoadingPromise;
 }
 
 /**
