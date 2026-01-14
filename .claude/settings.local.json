@@ -7,7 +7,9 @@
       "Bash(npm run build:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Implement browser-based audio pedalboard with real-time DSP effects\n\nAdd complete audio playground for bands with pedalboard-style effect chain:\n\nAudio Processing:\n- AudioWorklet-based effects: 3-band EQ, Distortion \\(soft/hard/tube\\), Delay, Chorus, Compressor\n- Real-time level metering \\(peak + RMS\\) at input and output stages\n- Input/output gain controls with visual feedback\n- Global bypass toggle for instant A/B comparison\n- Zero-allocation DSP processing for glitch-free playback\n\nEffect Chain Management:\n- Drag-and-drop effect reordering with @dnd-kit\n- Per-effect bypass and wet/dry mix controls\n- Live parameter adjustment with knob UI\n\nPreset System:\n- Save/load presets to localStorage\n- Export/import presets as JSON files\n- URL sharing with base64-encoded preset data\n- 5 built-in presets \\(Clean, Crunch, High Gain, Ambient, Vocal\\)\n\nExport:\n- Offline WAV rendering with OfflineAudioContext\n- Deterministic export matching real-time playback\n- Support for 16/24/32-bit depth with optional normalization\n\nAI Suggestions:\n- Audio analysis \\(spectral centroid, frequency bands, dynamics\\)\n- Intent-based effect recommendations from natural language\n- Genre presets for guitar, vocal, bass, ambient\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 10s npm run dev)",
+      "Bash(git commit:*)"
     ]
   }
 }

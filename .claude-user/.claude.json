@@ -1,12 +1,16 @@
 {
-  "numStartups": 2,
+  "numStartups": 3,
   "tipsHistory": {
     "new-user-warmup": 2,
     "plan-mode-for-complex-tasks": 2,
     "default-permission-mode-config": 2,
     "terminal-setup": 2,
     "memory-command": 2,
-    "theme-command": 2
+    "theme-command": 2,
+    "status-line": 3,
+    "stickers-command": 3,
+    "prompt-queue": 3,
+    "enter-to-steer-in-relatime": 3
   },
   "cachedStatsigGates": {
     "tengu_prompt_suggestion": true
@@ -108,7 +112,7 @@
     "3b91c6fd-4fd4-4b41-9ccb-862ffb1f2759": {
       "hasAccess": false,
       "hasAccessNotAsDefault": false,
-      "timestamp": 1768416691377
+      "timestamp": 1768426324430
     }
   },
   "officialMarketplaceAutoInstallAttempted": true,
