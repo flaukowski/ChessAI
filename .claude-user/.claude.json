@@ -1,0 +1,117 @@
+{
+  "numStartups": 2,
+  "tipsHistory": {
+    "new-user-warmup": 2,
+    "plan-mode-for-complex-tasks": 2,
+    "default-permission-mode-config": 2,
+    "terminal-setup": 2,
+    "memory-command": 2,
+    "theme-command": 2
+  },
+  "cachedStatsigGates": {
+    "tengu_prompt_suggestion": true
+  },
+  "cachedGrowthBookFeatures": {
+    "tengu_1p_event_batch_config": {
+      "scheduledDelayMillis": 5000,
+      "maxExportBatchSize": 200,
+      "maxQueueSize": 8192
+    },
+    "tengu_mcp_tool_search": true,
+    "tengu_scratch": false,
+    "tengu_disable_bypass_permissions_mode": false,
+    "tengu_log_segment_events": false,
+    "tengu_log_datadog_events": true,
+    "tengu_event_sampling_config": {},
+    "tengu_tool_pear": false,
+    "tengu_thinkback": false,
+    "tengu_sumi": false,
+    "tengu_c4w_usage_limit_notifications_enabled": true,
+    "tengu-top-of-feed-tip": {
+      "tip": "",
+      "color": ""
+    },
+    "tengu_react_vulnerability_warning": false,
+    "tengu_code_diff_cli": true,
+    "tengu_post_compact_survey": false,
+    "tengu_tool_search_unsupported_models": null,
+    "tengu_ant_attribution_header_new": true,
+    "enhanced_telemetry_beta": false,
+    "tengu_streaming_tool_execution2": false,
+    "tengu_permission_explainer": false
+  },
+  "userID": "c80a4f4ff08f7eb4dbdd88d63e5f1c1684f67a67ed459b754a8b4fd4874da6ec",
+  "firstStartTime": "2026-01-14T18:50:26.038Z",
+  "sonnet45MigrationComplete": true,
+  "opus45MigrationComplete": true,
+  "opusProMigrationComplete": true,
+  "thinkingMigrationComplete": true,
+  "cachedChromeExtensionInstalled": false,
+  "changelogLastFetched": 1768416691188,
+  "oauthAccount": {
+    "accountUuid": "317b4091-55bf-40ea-879f-f53f195c4381",
+    "emailAddress": "nflach78@gmail.com",
+    "organizationUuid": "3b91c6fd-4fd4-4b41-9ccb-862ffb1f2759",
+    "hasExtraUsageEnabled": false,
+    "displayName": "Flaukowski",
+    "organizationRole": "admin",
+    "workspaceRole": null,
+    "organizationName": "nflach78@gmail.com's Organization"
+  },
+  "claudeCodeFirstTokenDate": "2026-01-10T03:06:25.519236Z",
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.7",
+  "projects": {
+    "/home/runner/workspace": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "exampleFiles": [
+        "routes.ts",
+        "openai.ts",
+        "studio.tsx",
+        "storage.ts",
+        "prompt-sidebar.tsx"
+      ],
+      "exampleFilesGeneratedAt": 1768416692323
+    }
+  },
+  "githubRepoPaths": {
+    "nickflach/chessai": [
+      "/home/runner/workspace"
+    ]
+  },
+  "lastReleaseNotesSeen": "2.1.7",
+  "hasShownOpus45Notice": {
+    "3b91c6fd-4fd4-4b41-9ccb-862ffb1f2759": true
+  },
+  "groveConfigCache": {
+    "317b4091-55bf-40ea-879f-f53f195c4381": {
+      "grove_enabled": true,
+      "timestamp": 1768416691223
+    }
+  },
+  "s1mAccessCache": {
+    "3b91c6fd-4fd4-4b41-9ccb-862ffb1f2759": {
+      "hasAccess": false,
+      "hasAccessNotAsDefault": false,
+      "timestamp": 1768416691377
+    }
+  },
+  "officialMarketplaceAutoInstallAttempted": true,
+  "officialMarketplaceAutoInstalled": true,
+  "lastPlanModeUse": 1768420532826
+}

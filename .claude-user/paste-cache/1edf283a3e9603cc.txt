@@ -1,0 +1,266 @@
+1. Product Vision
+
+One-sentence vision
+A browser-based, real-time audio playground where bands can route guitar, bass, vocals, or line-in audio through modular effects, visualize sound, save presets, and export results — no DAW required.
+
+Design philosophy
+
+Fast, tactile, playful
+
+Studio-grade signal flow, not studio-grade complexity
+
+“Pedalboard + analyzer,” not “Pro Tools in a browser”
+
+2. Target Users
+Primary
+
+Bands rehearsing or experimenting
+
+Guitarists / bassists without pedalboards
+
+Vocalists testing tone chains
+
+Producers sketching ideas quickly
+
+Secondary
+
+Educators / students
+
+DSP hobbyists
+
+AI-curious musicians
+
+3. Supported Inputs (MVP)
+Input Type    Requirement
+Microphone    Web Audio getUserMedia
+Instrument via interface    Treated as mic input
+Audio file    Drag & drop WAV/MP3
+Multiple sources    Not simultaneous in MVP (explicitly out of scope)
+4. Core Functional Requirements (MVP)
+4.1 Signal Flow (Non-Negotiable)
+Input → Input Gain → Effect Chain → Output Gain → Output
+
+
+Requirements
+
+Input gain slider + peak meter
+
+Output gain slider + peak meter
+
+Global bypass
+
+Zero audio dropouts when toggling effects
+
+4.2 Effect Chain (Pedalboard Model)
+
+User can
+
+Add effects from a palette
+
+Reorder effects (drag & drop)
+
+Bypass individual effects
+
+Adjust parameters live
+
+Set wet/dry mix per effect
+
+Initial Effect Set (MVP)
+
+EQ (3-band)
+
+Distortion (hard + soft clip modes)
+
+Delay
+
+Chorus / Flanger (single modulation engine)
+
+Compressor (simple RMS)
+
+Constraint: Effects must run in AudioWorklet, no main-thread DSP.
+
+4.3 Visualization (Always On)
+
+Required visualizers
+
+Waveform (time domain)
+
+Frequency spectrum (FFT)
+
+Level meters (input + output)
+
+Constraints
+
+Visualization must not affect audio thread performance
+
+Visualizers may degrade gracefully on low-end devices
+
+4.4 Presets (Critical for Adoption)
+
+Preset includes
+
+Effect order
+
+Effect parameters
+
+Wet/dry settings
+
+Input/output gain
+
+User can
+
+Save preset (localStorage)
+
+Load preset
+
+Export preset as JSON
+
+Import preset from JSON
+
+Share preset via URL (base64-encoded JSON)
+
+4.5 Offline Export (MVP Differentiator)
+
+User can
+
+Render processed audio offline
+
+Download WAV file
+
+Implementation
+
+OfflineAudioContext
+
+Same effect chain graph
+
+Deterministic render (no randomness unless seeded)
+
+5. Non-Functional Requirements
+Performance
+
+Audio thread must:
+
+Allocate zero memory per frame
+
+Avoid closures
+
+Avoid logging
+
+UI updates must never block audio
+
+Latency
+
+Best effort < 15ms on modern hardware
+
+No promise of “zero latency” marketing
+
+Stability
+
+Audio graph must survive:
+
+Effect add/remove
+
+Parameter changes
+
+Input source switch
+
+6. AI Assistance (MVP-Lite, Not Gimmick)
+
+Purpose
+Help users discover effect chains quickly, not replace creativity.
+
+Inputs to AI
+
+Audio analysis snapshot (computed locally):
+
+RMS level
+
+Spectral centroid
+
+Low/mid/high energy ratios
+
+Dynamic range
+
+User intent (free text)
+
+Outputs from AI
+
+Suggested effect chain (ordered)
+
+Suggested parameters
+
+Plain-English explanation
+
+Constraints
+
+No raw audio uploaded
+
+AI is optional and skippable
+
+One-click “Apply suggestion”
+
+7. Explicit Non-Goals (MVP Guardrails)
+
+❌ Multi-track recording
+❌ MIDI support
+❌ Simultaneous multiple live inputs
+❌ User accounts / cloud saves
+❌ Marketplace / plugin store
+❌ Mobile-first UX (desktop first)
+
+8. Architecture Constraints
+Frontend
+
+React
+
+Web Audio API
+
+AudioWorklet for DSP
+
+Canvas/WebGL for visualizers
+
+DSP Layer
+
+Pure TypeScript
+
+Deterministic math
+
+Unit-testable
+
+No React imports
+
+State
+
+UI state ≠ audio state
+
+Audio graph is source of truth
+
+9. Success Metrics (MVP)
+
+User can:
+
+Plug in instrument
+
+Hear processed audio within 10 seconds
+
+Save a preset
+
+Export a WAV
+
+No audio glitches during 5-minute continuous use
+
+Presets shared via link reproduce sound exactly
+
+10. MVP Delivery Definition
+
+MVP is complete when:
+
+A guitarist can plug in, build a chain, jam, save it, export audio
+
+A vocalist can test compression/EQ live
+
+A band member can open a shared preset link and hear the same tone
+
+11. One-Shot LLM Build Prompt (Optional, Drop-In)
+
+“You are building a browser-based audio playground for bands using the Web Audio API and AudioWorklets. Implement a pedalboard-style effect chain with real-time processing, visualizers, preset save/load/share, and offline WAV export. Audio performance is critical: no allocations or logging in the audio thread. The UI must allow effect reordering, bypass, wet/dry control, and live parameter adjustment. Target guitar, bass, and vocal inputs. Follow the PRD exactly and do not add non-specified features.”
