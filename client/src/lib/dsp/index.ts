@@ -20,3 +20,4 @@ export * from './lfo';
 export * from './biquad';
 export * from './delay-line';
 export * from './effects';
+export * from './bluetooth-audio-manager';

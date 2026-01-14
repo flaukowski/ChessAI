@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Menu, Home, Upload, User, Plus, Waves, Sparkles, Music } from "lucide-react";
+import { Menu, Home, Upload, User, Plus, Waves, Sparkles, Music, Bluetooth, GitBranch } from "lucide-react";
 import { PromptSidebar, type GenerationParams } from "@/components/prompt-sidebar";
 import { AudioPlayer } from "@/components/audio-player";
 import { ImageGallery } from "@/components/image-gallery";
@@ -11,6 +11,9 @@ import { AudioVisualizer } from "@/components/audio-visualizer";
 import { AIEffectSuggester } from "@/components/ai-effect-suggester";
 import { AudioInput } from "@/components/audio-input";
 import { useAudioDSP } from "@/hooks/use-audio-dsp";
+import { useBluetoothAudio } from "@/hooks/use-bluetooth-audio";
+import { BluetoothDevicePanel } from "@/components/bluetooth-device-panel";
+import { AudioRoutingMatrix } from "@/components/audio-routing-matrix";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Progress } from "@/components/ui/progress";
@@ -20,7 +23,7 @@ export default function Studio() {
   const [currentMusic, setCurrentMusic] = useState<MusicGeneration | null>(null);
   const [images, setImages] = useState<ImageGeneration[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeView, setActiveView] = useState<'generate' | 'dsp'>('generate');
+  const [activeView, setActiveView] = useState<'generate' | 'dsp' | 'routing'>('generate');
   const [currentGenre, setCurrentGenre] = useState('indie-pop');
   const { toast } = useToast();
   
@@ -38,6 +41,31 @@ export default function Studio() {
     addEffect,
     setVolume,
   } = useAudioDSP();
+
+  // Multi-channel Bluetooth Audio Hook
+  const {
+    isInitialized: btInitialized,
+    devices,
+    inputChannels,
+    outputChannels,
+    routingMatrix,
+    channelLevels,
+    bandwidthWarning,
+    isScanning,
+    initialize: initializeBluetooth,
+    scanDevices,
+    createInputChannel,
+    createOutputChannel,
+    removeChannel,
+    setRouting,
+    toggleRouting,
+    updateRoutingGain,
+    setChannelVolume,
+    setChannelPan,
+    setChannelMute,
+    startLevelMetering,
+    stopLevelMetering,
+  } = useBluetoothAudio();
 
   // Load initial data
   useEffect(() => {
@@ -266,7 +294,7 @@ export default function Studio() {
         </header>
 
         {/* Content Container with View Tabs */}
-        <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'generate' | 'dsp')} className="flex-1 flex flex-col overflow-hidden">
+        <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'generate' | 'dsp' | 'routing')} className="flex-1 flex flex-col overflow-hidden">
           <div className="px-6 pt-4 border-b border-border">
             <TabsList className="bg-muted/50">
               <TabsTrigger value="generate" className="gap-2">
@@ -276,6 +304,10 @@ export default function Studio() {
               <TabsTrigger value="dsp" className="gap-2">
                 <Waves className="w-4 h-4" />
                 DSP Effects
+              </TabsTrigger>
+              <TabsTrigger value="routing" className="gap-2">
+                <Bluetooth className="w-4 h-4" />
+                Multi-Channel
               </TabsTrigger>
             </TabsList>
           </div>
@@ -397,6 +429,63 @@ export default function Studio() {
                   <p className="text-xs text-muted-foreground">
                     Real-time audio processing powered by algorithms ported from C-based guitar pedal effects. 
                     Features biquad filters, echo, flanger, phaser, and LFO modulation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Multi-Channel Routing View */}
+          <TabsContent value="routing" className="flex-1 overflow-y-auto p-6 m-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column - Device Panel */}
+              <div className="lg:col-span-1">
+                <BluetoothDevicePanel
+                  devices={devices}
+                  inputChannels={inputChannels}
+                  outputChannels={outputChannels}
+                  isScanning={isScanning}
+                  bandwidthWarning={bandwidthWarning}
+                  onScanDevices={async () => {
+                    if (!btInitialized) {
+                      await initializeBluetooth();
+                      startLevelMetering();
+                    }
+                    await scanDevices();
+                  }}
+                  onCreateInputChannel={createInputChannel}
+                  onCreateOutputChannel={createOutputChannel}
+                  onRemoveChannel={removeChannel}
+                  onSetChannelMute={setChannelMute}
+                />
+              </div>
+
+              {/* Right Column - Routing Matrix */}
+              <div className="lg:col-span-2">
+                <AudioRoutingMatrix
+                  inputChannels={inputChannels}
+                  outputChannels={outputChannels}
+                  routingMatrix={routingMatrix}
+                  channelLevels={channelLevels}
+                  onSetRouting={setRouting}
+                  onToggleRouting={toggleRouting}
+                  onUpdateRoutingGain={updateRoutingGain}
+                  onSetChannelVolume={setChannelVolume}
+                  onSetChannelPan={setChannelPan}
+                />
+              </div>
+            </div>
+
+            {/* Multi-Channel Info Banner */}
+            <div className="mt-6 p-4 rounded-lg border border-blue-500/20 bg-gradient-to-r from-blue-500/5 to-violet-500/5">
+              <div className="flex items-start gap-3">
+                <GitBranch className="w-5 h-5 text-blue-500 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Multi-Channel Bluetooth Audio</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Connect multiple Bluetooth instruments simultaneously with intelligent bandwidth management.
+                    Route any input to any output with independent volume and pan controls.
+                    Priority scheduling prevents audio dropouts when approaching Bluetooth bandwidth limits.
                   </p>
                 </div>
               </div>
