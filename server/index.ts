@@ -7,8 +7,16 @@ import { initializeDefaultUser } from "./auth";
 
 const app = express();
 
+const getSessionSecret = () => {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET environment variable is required in production');
+  }
+  return nanoid(32); // Random secret for development only
+};
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'space-child-secret-key-change-in-production',
+  secret: getSessionSecret(),
   resave: false,
   saveUninitialized: false,
   cookie: {
