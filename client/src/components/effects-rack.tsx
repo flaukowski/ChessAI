@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Plus, 
@@ -14,10 +15,15 @@ import {
   AudioLines,
   ChevronDown,
   ChevronUp,
-  GripVertical
+  GripVertical,
+  SlidersHorizontal,
+  Circle
 } from "lucide-react";
 import { useAudioDSP, EffectType, EffectInstance } from "@/hooks/use-audio-dsp";
 import { cn } from "@/lib/utils";
+import { VirtualKnob } from "@/components/ui/virtual-knob";
+import { EffectPicker } from "@/components/effect-picker";
+import { AIOptimizer } from "@/components/ai-optimizer";
 
 const EFFECT_CONFIGS: Record<EffectType, {
   label: string;
@@ -98,13 +104,26 @@ const EFFECT_CONFIGS: Record<EffectType, {
 interface EffectCardProps {
   effect: EffectInstance;
   config: typeof EFFECT_CONFIGS[EffectType];
+  viewMode: 'sliders' | 'knobs';
   onRemove: () => void;
   onToggle: () => void;
   onParamChange: (param: string, value: number) => void;
 }
 
-function EffectCard({ effect, config, onRemove, onToggle, onParamChange }: EffectCardProps) {
+// Map gradient colors to knob colors
+const gradientToKnobColor: Record<string, string> = {
+  'from-blue-500 to-cyan-500': 'cyan',
+  'from-purple-500 to-pink-500': 'purple',
+  'from-green-500 to-emerald-500': 'green',
+  'from-orange-500 to-amber-500': 'orange',
+  'from-red-500 to-rose-500': 'red',
+  'from-indigo-500 to-violet-500': 'purple',
+  'from-teal-500 to-cyan-500': 'cyan',
+};
+
+function EffectCard({ effect, config, viewMode, onRemove, onToggle, onParamChange }: EffectCardProps) {
   const [expanded, setExpanded] = useState(true);
+  const knobColor = gradientToKnobColor[config.color] || 'cyan';
 
   return (
     <Card className={cn(
@@ -153,27 +172,51 @@ function EffectCard({ effect, config, onRemove, onToggle, onParamChange }: Effec
         </div>
       </CardHeader>
       {expanded && (
-        <CardContent className="p-3 pt-2 space-y-3">
-          {config.params.map((param) => (
-            <div key={param.key} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">{param.label}</Label>
-                <span className="text-xs font-mono">
-                  {effect.params[param.key]?.toFixed(param.step < 1 ? 2 : 0)}
-                  {param.unit && <span className="text-muted-foreground ml-0.5">{param.unit}</span>}
-                </span>
-              </div>
-              <Slider
-                value={[effect.params[param.key] || param.min]}
-                min={param.min}
-                max={param.max}
-                step={param.step}
-                onValueChange={([value]) => onParamChange(param.key, value)}
-                disabled={!effect.enabled}
-                className="w-full"
-              />
+        <CardContent className="p-3 pt-2">
+          {viewMode === 'knobs' ? (
+            /* Knob View */
+            <div className="flex flex-wrap justify-center gap-4 py-2">
+              {config.params.map((param) => (
+                <VirtualKnob
+                  key={param.key}
+                  value={effect.params[param.key] || param.min}
+                  min={param.min}
+                  max={param.max}
+                  step={param.step}
+                  label={param.label}
+                  unit={param.unit}
+                  color={knobColor}
+                  size="md"
+                  disabled={!effect.enabled}
+                  onChange={(value) => onParamChange(param.key, value)}
+                />
+              ))}
             </div>
-          ))}
+          ) : (
+            /* Slider View */
+            <div className="space-y-3">
+              {config.params.map((param) => (
+                <div key={param.key} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">{param.label}</Label>
+                    <span className="text-xs font-mono">
+                      {effect.params[param.key]?.toFixed(param.step < 1 ? 2 : 0)}
+                      {param.unit && <span className="text-muted-foreground ml-0.5">{param.unit}</span>}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[effect.params[param.key] || param.min]}
+                    min={param.min}
+                    max={param.max}
+                    step={param.step}
+                    onValueChange={([value]) => onParamChange(param.key, value)}
+                    disabled={!effect.enabled}
+                    className="w-full"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
@@ -193,89 +236,157 @@ export function EffectsRack({ className }: EffectsRackProps) {
     removeEffect,
     updateEffectParam,
     toggleEffect,
+    analyser,
   } = useAudioDSP();
 
   const [selectedEffect, setSelectedEffect] = useState<EffectType>("echo");
+  const [viewMode, setViewMode] = useState<'sliders' | 'knobs'>('knobs');
+  const [addMode, setAddMode] = useState<'picker' | 'dropdown'>('picker');
 
-  const handleAddEffect = async () => {
+  const handleAddEffect = async (effectType?: EffectType) => {
     if (!isInitialized) {
       await initialize();
     }
-    addEffect(selectedEffect);
+    addEffect(effectType || selectedEffect);
+  };
+
+  const handleAIOptimize = (effectId: string, params: Record<string, number>) => {
+    Object.entries(params).forEach(([param, value]) => {
+      updateEffectParam(effectId, param, value);
+    });
   };
 
   return (
-    <Card className={cn("", className)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Waves className="w-5 h-5 text-cyan-500" />
-            Effects Rack
-          </CardTitle>
-          <span className="text-xs text-muted-foreground">
-            {effects.length} effect{effects.length !== 1 ? 's' : ''} active
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Add Effect Controls */}
-        <div className="flex gap-2">
-          <Select value={selectedEffect} onValueChange={(v) => setSelectedEffect(v as EffectType)}>
-            <SelectTrigger className="flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(EFFECT_CONFIGS).map(([key, config]) => (
-                <SelectItem key={key} value={key}>
-                  <div className="flex items-center gap-2">
-                    {config.icon}
-                    {config.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAddEffect} className="bg-gradient-to-r from-cyan-500 to-purple-600">
-            <Plus className="w-4 h-4 mr-1" />
-            Add
-          </Button>
-        </div>
-
-        {/* Effects List */}
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {effects.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Waves className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No effects added yet</p>
-              <p className="text-xs">Add effects to process your audio in real-time</p>
+    <div className={cn("space-y-4", className)}>
+      {/* Main Effects Rack Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Waves className="w-5 h-5 text-cyan-500" />
+              Effects Rack
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                <Button
+                  variant={viewMode === 'knobs' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setViewMode('knobs')}
+                >
+                  <Circle className="w-3 h-3 mr-1" />
+                  Knobs
+                </Button>
+                <Button
+                  variant={viewMode === 'sliders' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setViewMode('sliders')}
+                >
+                  <SlidersHorizontal className="w-3 h-3 mr-1" />
+                  Sliders
+                </Button>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {effects.length} active
+              </span>
             </div>
-          ) : (
-            effects.map((effect) => (
-              <EffectCard
-                key={effect.id}
-                effect={effect}
-                config={EFFECT_CONFIGS[effect.type]}
-                onRemove={() => removeEffect(effect.id)}
-                onToggle={() => toggleEffect(effect.id)}
-                onParamChange={(param, value) => updateEffectParam(effect.id, param, value)}
-              />
-            ))
-          )}
-        </div>
-
-        {/* DSP Info */}
-        {effects.length > 0 && (
-          <div className="text-xs text-muted-foreground border-t pt-3">
-            <p className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              DSP Engine: Web Audio API
-            </p>
-            <p className="mt-1 opacity-70">
-              Algorithms ported from AudioNoise C library
-            </p>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add Effect Section with Tabs */}
+          <Tabs value={addMode} onValueChange={(v) => setAddMode(v as 'picker' | 'dropdown')}>
+            <TabsList className="grid w-full grid-cols-2 h-8">
+              <TabsTrigger value="picker" className="text-xs">Visual Picker</TabsTrigger>
+              <TabsTrigger value="dropdown" className="text-xs">Dropdown</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="picker" className="mt-3">
+              <EffectPicker
+                selectedEffect={selectedEffect}
+                onSelect={setSelectedEffect}
+                onAdd={handleAddEffect}
+              />
+              <Button 
+                onClick={() => handleAddEffect()} 
+                className="w-full mt-3 bg-gradient-to-r from-cyan-500 to-purple-600"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add {EFFECT_CONFIGS[selectedEffect]?.label || 'Effect'}
+              </Button>
+            </TabsContent>
+            
+            <TabsContent value="dropdown" className="mt-3">
+              <div className="flex gap-2">
+                <Select value={selectedEffect} onValueChange={(v) => setSelectedEffect(v as EffectType)}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(EFFECT_CONFIGS).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          {config.icon}
+                          {config.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => handleAddEffect()} className="bg-gradient-to-r from-cyan-500 to-purple-600">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Effects List */}
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {effects.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Waves className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No effects added yet</p>
+                <p className="text-xs">Select an effect above and click Add</p>
+              </div>
+            ) : (
+              effects.map((effect) => (
+                <EffectCard
+                  key={effect.id}
+                  effect={effect}
+                  config={EFFECT_CONFIGS[effect.type]}
+                  viewMode={viewMode}
+                  onRemove={() => removeEffect(effect.id)}
+                  onToggle={() => toggleEffect(effect.id)}
+                  onParamChange={(param, value) => updateEffectParam(effect.id, param, value)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* DSP Info */}
+          {effects.length > 0 && (
+            <div className="text-xs text-muted-foreground border-t pt-3">
+              <p className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                DSP Engine: Web Audio API
+              </p>
+              <p className="mt-1 opacity-70">
+                Algorithms ported from AudioNoise C library
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Optimizer Card */}
+      <AIOptimizer
+        effects={effects}
+        analyser={analyser}
+        currentGenre="indie-pop"
+        onOptimize={handleAIOptimize}
+      />
+    </div>
   );
 }
