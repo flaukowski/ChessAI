@@ -1,10 +1,18 @@
 # Overview
 
-This is a full-stack web application that enables users to generate AI-powered music and images. The application integrates with Suno AI for music generation and OpenAI (DALL-E 3 and GPT-5) for image generation and prompt enhancement. Users can create music tracks with customizable parameters (style, vocals, duration) and generate accompanying visual artwork. The application features a studio interface with real-time audio playback, generation history tracking, and image galleries.
+AudioNoise Web is a full-stack web application for real-time audio Digital Signal Processing (DSP) effects in the browser. The application ports professional-grade audio algorithms from the AudioNoise C library (guitar pedals) to TypeScript and Web Audio API. Users can load audio files or connect a microphone, apply DSP effects (echo, flanger, phaser, biquad filters), visualize audio in real-time, and manage Bluetooth audio devices for multi-channel routing.
 
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+# Recent Changes
+
+- **January 2026**: Refactored from SonicVision (AI music/image generation) to AudioNoise Web (DSP effects focus)
+  - Removed Suno AI music generation and OpenAI image generation
+  - Rebuilt Studio page with DSP effects rack, audio visualization, and Bluetooth routing
+  - Simplified schema to users + userAISettings
+  - Updated branding throughout
 
 # System Architecture
 
@@ -12,85 +20,87 @@ Preferred communication style: Simple, everyday language.
 
 **Technology Stack**: React 18 with TypeScript, Vite for bundling, and Wouter for client-side routing.
 
-**UI Framework**: shadcn/ui component library built on Radix UI primitives with Tailwind CSS for styling. Uses the "new-york" style variant with a dark-themed color palette featuring purple primary colors (hsl(280, 85%, 60%)).
+**UI Framework**: shadcn/ui component library built on Radix UI primitives with Tailwind CSS for styling. Dark-themed color palette with cyan/purple gradient accents.
 
-**State Management**: TanStack Query (React Query) for server state management and caching. Query client configured with disabled automatic refetching (`refetchOnWindowFocus: false`, infinite `staleTime`) for optimized API interactions.
+**State Management**: TanStack Query (React Query) for server state management. Local state via React hooks for audio DSP and Bluetooth management.
 
 **Key Components**:
-- `PromptSidebar`: Main generation interface with tabbed music/image controls and advanced parameter configuration
-- `AudioPlayer`: Custom audio player with waveform visualization using HTML5 Canvas
-- `GenerationHistory`: Polling-based history viewer that automatically refreshes every 2 seconds when pending generations exist
-- `ImageGallery`: Paginated gallery with download and sharing capabilities
+- `AudioInput`: File upload and microphone input with volume control
+- `AudioVisualizer`: Real-time waveform, spectrum, and spectrogram visualization using HTML5 Canvas
+- `EffectsRack`: DSP effects chain with echo, flanger, phaser, and biquad filters (lowpass, highpass, bandpass, notch)
+- `BluetoothDevicePanel`: Bluetooth audio device discovery and channel management
+- `AudioRoutingMatrix`: Input-to-output routing configuration with gain control
+- `MobileNav`/`MobileHeader`: Mobile-responsive navigation components
 
-**Routing**: Single-page application with `/` and `/studio` routes pointing to the main Studio page.
+**Key Hooks**:
+- `useAudioDSP`: Manages audio engine, effects chain, and file/microphone input
+- `useBluetoothAudio`: Manages Bluetooth device discovery, channels, and routing
+- `useSpaceChildAuth`: Authentication state management
+- `useIsMobile`: Responsive breakpoint detection
+
+**Routing**: Single-page application with `/` (landing) and `/studio` (main DSP workspace) routes.
 
 ## Backend Architecture
 
 **Framework**: Express.js server with TypeScript, running on Node.js.
 
-**API Design**: RESTful API structure under `/api` namespace:
-- `POST /api/music/generate` - Initiates music generation with prompt enhancement
-- `GET /api/music/:id/status` - Polls generation status
-- `GET /api/music/:id/download` - Downloads completed audio files
-- `POST /api/images/generate` - Generates images with optional music context
-- `GET /api/generations` - Retrieves all user generations
-- `GET /api/generations/images` - Retrieves image generations only
+**API Design**: Minimal RESTful API under `/api` namespace:
+- `GET /health` - Health check endpoint
+- `GET /metrics` - Application metrics
+- `GET /ready` - Database readiness check
+- `/api/space-child-auth/*` - Authentication routes
 
-**Service Layer Pattern**: Separate service modules for external API integrations:
-- `server/services/openai.ts` - OpenAI GPT-5 for prompt enhancement and DALL-E 3 for image generation
-- `server/services/suno.ts` - SunoAPI.org third-party service for Suno AI music generation
-
-**Data Access Layer**: Storage abstraction through `IStorage` interface implemented by `DatabaseStorage` class, enabling potential future storage backend swaps.
-
-**Request Logging**: Custom middleware logs all `/api` requests with duration tracking and response preview (truncated at 80 characters).
+**Authentication**: Space Child Auth integration for user login/registration with password hashing (bcryptjs).
 
 ## Database Architecture
 
-**ORM**: Drizzle ORM with PostgreSQL dialect, using Neon serverless database driver with WebSocket support.
+**ORM**: Drizzle ORM with PostgreSQL dialect, using Neon serverless database driver.
 
 **Schema Design** (`shared/schema.ts`):
+- `users` table: User authentication (id, username, email, firstName, lastName, password)
+- `userAISettings` table: Optional LLM integration settings per user
+  - Supports providers: none, openai, anthropic, ollama, custom
+  - Stores API keys, base URLs, model preferences
 
-- `users` table: User authentication (username/password), currently not actively used in the application
-- `musicGenerations` table: Stores music generation requests and results
-  - Tracks status progression: pending → processing → completed/failed
-  - Stores both `audioUrl` and `imageUrl` for generated content
-  - Includes `taskId` for external API polling
-  - JSONB `metadata` field for extensible storage (BPM, key, genre)
-  - Supports multiple model versions (V5, V4_5PLUS, V4_5, V4, V3_5)
-- `imageGenerations` table: Stores image generation requests
-  - Optional `musicGenerationId` foreign key to link images with music tracks
-  - Tracks status and stores resulting `imageUrl`
+**Validation**: Zod schemas auto-generated from Drizzle schemas using `drizzle-zod`.
 
-**Validation**: Zod schemas auto-generated from Drizzle schemas using `drizzle-zod` for runtime type safety on API boundaries.
+## DSP Library (`client/src/lib/dsp/`)
 
-**Migration Management**: Drizzle Kit configured with migrations output to `./migrations` directory.
+**Audio Engine** (`audio-engine.ts`):
+- Web Audio API context management
+- Source node connection (file/microphone)
+- Effects chain management
+- Analyser node for visualization
+
+**Effects** (`effects/`):
+- `echo.ts`: Delay-based echo with feedback
+- `flanger.ts`: LFO-modulated delay for flanging effect
+- `phaser.ts`: Multi-stage all-pass filter phaser
+
+**Filters** (`biquad.ts`):
+- Biquad filter implementation (lowpass, highpass, bandpass, notch, allpass)
+- Frequency and Q parameter control
+
+**Modulation** (`lfo.ts`):
+- Low-frequency oscillator for effect modulation
+- Sine, triangle, square waveforms
+
+**Bluetooth Audio** (`bluetooth-audio-manager.ts`):
+- Multi-device discovery
+- Input/output channel creation
+- Routing matrix with gain control
+- Level metering
 
 ## External Dependencies
-
-**Suno AI Music Generation**:
-- Access via SunoAPI.org third-party API service
-- Base URL: `https://api.sunoapi.org/api/v1`
-- Configured via `SUNO_API_KEY` environment variable
-- Supports custom parameters: style, vocals, instrumental mode, weirdness/style weights
-- Async generation pattern: POST request returns `taskId`, subsequent polling for completion
-
-**OpenAI Integration**:
-- GPT-5 model for music prompt enhancement (creates detailed, artistic descriptions)
-- DALL-E 3 for image generation (1024x1024, standard quality)
-- Configured via `OPENAI_API_KEY` environment variable
-- Context-aware image generation: optionally enhances prompts based on music characteristics
 
 **Neon Database**:
 - Serverless PostgreSQL hosting
 - WebSocket-based connection using `@neondatabase/serverless` driver
 - Configured via `DATABASE_URL` environment variable
-- Connection pooling via `Pool` class
 
 **Development Tools**:
-- Replit-specific plugins for runtime error overlay, cartographer navigation, and dev banner
-- Vite HMR configured with custom server integration for development
-
-**Font Loading**: Google Fonts CDN for Inter, Architects Daughter, DM Sans, Fira Code, and Geist Mono font families.
+- Replit-specific plugins for runtime error overlay and dev banner
+- Vite HMR for hot module replacement
 
 ## Application Build and Deployment
 
@@ -101,8 +111,7 @@ Preferred communication style: Simple, everyday language.
 
 **Environment Variables Required**:
 - `DATABASE_URL` - Neon PostgreSQL connection string
-- `OPENAI_API_KEY` - OpenAI API authentication
-- `SUNO_API_KEY` - SunoAPI.org authentication
+- `OPENAI_API_KEY` - Optional, for AI effect suggestions
 - `NODE_ENV` - Environment mode (development/production)
 
 **Static Asset Serving**: In production, Express serves built frontend from `dist/public`. In development, Vite dev server handles assets via middleware mode with HMR.
