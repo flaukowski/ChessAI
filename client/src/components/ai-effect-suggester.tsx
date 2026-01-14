@@ -2,9 +2,13 @@ import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Wand2, Loader2, ChevronRight, Lightbulb } from "lucide-react";
-import { EffectType } from "@/hooks/use-audio-dsp";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Sparkles, Wand2, Loader2, ChevronRight, Lightbulb, Play, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Support both old and new effect types
+export type EffectType = 'echo' | 'flanger' | 'phaser' | 'lowpass' | 'highpass' | 'bandpass' | 'notch' | 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor';
 
 interface EffectSuggestion {
   type: EffectType;
@@ -16,6 +20,7 @@ interface EffectSuggestion {
 interface AIEffectSuggesterProps {
   analyser: AnalyserNode | null;
   onApplySuggestion: (type: EffectType, params: Record<string, number>) => void;
+  onApplyChain?: (suggestions: EffectSuggestion[]) => void;
   currentGenre?: string;
   className?: string;
 }
@@ -135,11 +140,46 @@ function generateDynamicSuggestions(profile: ReturnType<typeof analyzeFrequencyP
   return suggestions;
 }
 
-export function AIEffectSuggester({ 
-  analyser, 
-  onApplySuggestion, 
+// Advanced presets using new worklet effects
+const ADVANCED_PRESETS: Record<string, EffectSuggestion[]> = {
+  "guitar-clean": [
+    { type: "eq", reason: "Shape clean tone with presence boost", params: { lowGain: -2, lowFreq: 200, midGain: 2, midFreq: 1000, midQ: 1, highGain: 4, highFreq: 5000, mix: 1 }, confidence: 0.88 },
+    { type: "compressor", reason: "Even dynamics for clean playing", params: { threshold: -20, ratio: 3, attack: 10, release: 100, makeupGain: 3, mix: 1 }, confidence: 0.85 },
+    { type: "chorus", reason: "Add shimmer and width", params: { rate: 0.5, depth: 0.4, voices: 2, mix: 0.25 }, confidence: 0.8 },
+  ],
+  "guitar-crunch": [
+    { type: "eq", reason: "Pre-distortion tone shaping", params: { lowGain: 2, lowFreq: 200, midGain: 4, midFreq: 800, midQ: 1.5, highGain: -2, highFreq: 4000, mix: 1 }, confidence: 0.9 },
+    { type: "distortion", reason: "Classic rock crunch", params: { drive: 0.4, tone: 0.6, mode: 0, level: 0.7, mix: 1 }, confidence: 0.92 },
+    { type: "compressor", reason: "Tighten up the crunch", params: { threshold: -15, ratio: 4, attack: 5, release: 80, makeupGain: 4, mix: 0.7 }, confidence: 0.85 },
+  ],
+  "guitar-heavy": [
+    { type: "eq", reason: "Scoop mids for heavy tone", params: { lowGain: 4, lowFreq: 150, midGain: -4, midFreq: 500, midQ: 2, highGain: 6, highFreq: 3000, mix: 1 }, confidence: 0.88 },
+    { type: "distortion", reason: "High gain metal distortion", params: { drive: 0.8, tone: 0.5, mode: 1, level: 0.6, mix: 1 }, confidence: 0.95 },
+    { type: "compressor", reason: "Maximum sustain and punch", params: { threshold: -10, ratio: 6, attack: 2, release: 50, makeupGain: 6, mix: 1 }, confidence: 0.9 },
+  ],
+  "vocal": [
+    { type: "eq", reason: "Vocal presence and clarity", params: { lowGain: -6, lowFreq: 120, midGain: 3, midFreq: 2500, midQ: 1.5, highGain: 4, highFreq: 8000, mix: 1 }, confidence: 0.92 },
+    { type: "compressor", reason: "Consistent vocal level", params: { threshold: -18, ratio: 4, attack: 15, release: 150, makeupGain: 4, mix: 1 }, confidence: 0.9 },
+    { type: "delay", reason: "Subtle depth", params: { time: 150, feedback: 0.2, damping: 0.4, mix: 0.15 }, confidence: 0.75 },
+  ],
+  "bass": [
+    { type: "eq", reason: "Bass tone sculpting", params: { lowGain: 3, lowFreq: 80, midGain: -2, midFreq: 400, midQ: 1, highGain: 2, highFreq: 2500, mix: 1 }, confidence: 0.9 },
+    { type: "compressor", reason: "Even bass response", params: { threshold: -15, ratio: 5, attack: 8, release: 80, makeupGain: 3, mix: 1 }, confidence: 0.88 },
+    { type: "distortion", reason: "Optional grit", params: { drive: 0.2, tone: 0.4, mode: 2, level: 0.8, mix: 0.3 }, confidence: 0.7 },
+  ],
+  "ambient": [
+    { type: "eq", reason: "Remove harshness", params: { lowGain: -4, lowFreq: 300, midGain: 0, midFreq: 1000, midQ: 1, highGain: 6, highFreq: 6000, mix: 1 }, confidence: 0.85 },
+    { type: "chorus", reason: "Ethereal width", params: { rate: 0.3, depth: 0.6, voices: 3, mix: 0.4 }, confidence: 0.88 },
+    { type: "delay", reason: "Spacious atmosphere", params: { time: 500, feedback: 0.55, damping: 0.4, mix: 0.4 }, confidence: 0.92 },
+  ],
+};
+
+export function AIEffectSuggester({
+  analyser,
+  onApplySuggestion,
+  onApplyChain,
   currentGenre = "indie-pop",
-  className 
+  className
 }: AIEffectSuggesterProps) {
   const [suggestions, setSuggestions] = useState<EffectSuggestion[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -244,8 +284,8 @@ export function AIEffectSuggester({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm capitalize">{suggestion.type}</span>
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={cn("text-xs", getConfidenceColor(suggestion.confidence))}
                         >
                           {Math.round(suggestion.confidence * 100)}%
@@ -267,6 +307,17 @@ export function AIEffectSuggester({
                 </div>
               ))}
             </div>
+
+            {/* Apply All Button */}
+            {onApplyChain && suggestions.length > 1 && (
+              <Button
+                className="w-full mt-3 bg-gradient-to-r from-purple-500 to-pink-500"
+                onClick={() => onApplyChain(suggestions)}
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Apply All ({suggestions.length} effects)
+              </Button>
+            )}
           </>
         )}
       </CardContent>

@@ -1,47 +1,184 @@
 /**
  * AudioNoise Web Studio
- * Real-time DSP effects processing workspace
+ * Real-time DSP effects processing workspace with pedalboard-style effect chain
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'wouter';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, Home, LogOut, Bluetooth, Waves, ChevronLeft } from 'lucide-react';
+import { Volume2, Home, LogOut, Bluetooth, Waves, ChevronLeft, Download, FileAudio, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 
 import { AudioInput } from '@/components/audio-input';
 import { AudioVisualizer } from '@/components/audio-visualizer';
-import { EffectsRack } from '@/components/effects-rack';
+import { Pedalboard } from '@/components/pedalboard';
+import { AIEffectSuggester, type EffectType } from '@/components/ai-effect-suggester';
 import { BluetoothDevicePanel } from '@/components/bluetooth-device-panel';
 import { AudioRoutingMatrix } from '@/components/audio-routing-matrix';
 import { MobileNav, MobileHeader } from '@/components/mobile-nav';
 
-import { useAudioDSP } from '@/hooks/use-audio-dsp';
+import { usePedalboard, type WorkletEffectType } from '@/hooks/use-pedalboard';
 import { useBluetoothAudio } from '@/hooks/use-bluetooth-audio';
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { decodePresetFromUrl, initializeDefaultPresets } from '@/lib/preset-manager';
+import { exportToWav, loadAudioFile, downloadWav, type ExportProgress } from '@/lib/dsp/wav-export';
 
 export default function Studio() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { user, isAuthenticated, logout } = useSpaceChildAuth();
   const isMobile = useIsMobile();
-  
+
   const [activeView, setActiveView] = useState<'dsp' | 'routing'>('dsp');
   const [menuOpen, setMenuOpen] = useState(false);
-  
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const audioFileRef = useRef<File | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+
   const {
-    isPlaying,
-    volume,
+    isInitialized,
+    inputGain,
+    outputGain,
+    globalBypass,
+    effects,
     inputSource,
+    levels,
     initialize: initializeAudio,
     connectAudioFile,
     connectMicrophone,
     disconnectMicrophone,
-    setVolume,
+    addEffect,
+    removeEffect,
+    reorderEffects,
+    toggleEffect,
+    updateEffectParam,
+    setInputGain,
+    setOutputGain,
+    setGlobalBypass,
+    getFrequencyData,
+    getTimeDomainData,
+    exportPreset,
+    importPreset,
     analyser,
-  } = useAudioDSP();
+    audioContext,
+  } = usePedalboard();
+
+  // Initialize default presets on first load
+  useEffect(() => {
+    initializeDefaultPresets();
+  }, []);
+
+  // Check for preset in URL on load
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const presetParam = params.get('preset');
+    if (presetParam) {
+      const preset = decodePresetFromUrl(presetParam);
+      if (preset) {
+        // Build preset JSON for import
+        const presetJson = JSON.stringify({
+          version: 1,
+          inputGain: preset.inputGain,
+          outputGain: preset.outputGain,
+          effects: preset.effects,
+        });
+        // Delay import to ensure audio is initialized
+        setTimeout(() => {
+          importPreset(presetJson);
+        }, 500);
+      }
+    }
+  }, [searchString, importPreset]);
+
+  // Handle file loaded for export
+  const handleAudioFileLoaded = useCallback(async (file: File) => {
+    audioFileRef.current = file;
+    try {
+      audioBufferRef.current = await loadAudioFile(file);
+    } catch (error) {
+      console.error('Failed to load audio buffer:', error);
+    }
+  }, []);
+
+  // WAV Export handler
+  const handleExport = useCallback(async () => {
+    if (!audioBufferRef.current || effects.length === 0) {
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress({ phase: 'preparing', progress: 0 });
+
+    try {
+      const effectsForExport = effects.map((e) => ({
+        type: e.type,
+        enabled: e.enabled,
+        params: e.params,
+      }));
+
+      const wavBlob = await exportToWav(
+        audioBufferRef.current,
+        effectsForExport,
+        inputGain,
+        outputGain,
+        { normalize: true },
+        setExportProgress
+      );
+
+      const filename = audioFileRef.current?.name?.replace(/\.[^/.]+$/, '') || 'processed';
+      downloadWav(wavBlob, `${filename}-processed.wav`);
+
+      setExportDialogOpen(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  }, [effects, inputGain, outputGain]);
+
+  // AI suggestion handlers - map old effect types to new ones
+  const handleAISuggestion = useCallback((type: EffectType, params: Record<string, number>) => {
+    // Map old types to new worklet types
+    const typeMap: Record<string, WorkletEffectType> = {
+      'echo': 'delay',
+      'flanger': 'chorus',
+      'phaser': 'chorus',
+      'lowpass': 'eq',
+      'highpass': 'eq',
+      'bandpass': 'eq',
+      'notch': 'eq',
+      'eq': 'eq',
+      'distortion': 'distortion',
+      'delay': 'delay',
+      'chorus': 'chorus',
+      'compressor': 'compressor',
+    };
+
+    const newType = typeMap[type] || 'eq';
+    const id = addEffect(newType);
+
+    // Apply params
+    if (id) {
+      Object.entries(params).forEach(([param, value]) => {
+        updateEffectParam(id, param, value);
+      });
+    }
+  }, [addEffect, updateEffectParam]);
+
+  const handleAIChainSuggestion = useCallback((suggestions: Array<{ type: EffectType; params: Record<string, number> }>) => {
+    suggestions.forEach((suggestion) => {
+      handleAISuggestion(suggestion.type, suggestion.params);
+    });
+  }, [handleAISuggestion]);
 
   const {
     devices,
@@ -80,29 +217,119 @@ export default function Studio() {
 
   const renderDSPView = () => (
     <div className="flex flex-col gap-4 lg:gap-6">
+      {/* Input and Visualizer Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         <div className="lg:col-span-1">
           <AudioInput
             onAudioElementReady={connectAudioFile}
             onMicrophoneConnect={connectMicrophone}
             onMicrophoneDisconnect={disconnectMicrophone}
+            onFileLoaded={handleAudioFileLoaded}
             inputSource={inputSource}
-            volume={volume}
-            onVolumeChange={setVolume}
+            volume={inputGain}
+            onVolumeChange={setInputGain}
             className="h-full"
           />
         </div>
-        
+
         <div className="lg:col-span-2">
           <AudioVisualizer
             analyser={analyser}
-            isPlaying={isPlaying}
+            isPlaying={inputSource !== null}
             className="h-[200px] lg:h-full"
           />
         </div>
       </div>
 
-      <EffectsRack />
+      {/* Pedalboard */}
+      <Pedalboard
+        effects={effects}
+        inputGain={inputGain}
+        outputGain={outputGain}
+        globalBypass={globalBypass}
+        levels={levels}
+        onAddEffect={addEffect}
+        onRemoveEffect={removeEffect}
+        onReorderEffects={reorderEffects}
+        onToggleEffect={toggleEffect}
+        onUpdateParam={updateEffectParam}
+        onSetInputGain={setInputGain}
+        onSetOutputGain={setOutputGain}
+        onSetGlobalBypass={setGlobalBypass}
+        onExportPreset={exportPreset}
+        onImportPreset={importPreset}
+      />
+
+      {/* AI Effect Suggester */}
+      <AIEffectSuggester
+        analyser={analyser}
+        onApplySuggestion={handleAISuggestion}
+        onApplyChain={handleAIChainSuggestion}
+        currentGenre="guitar-clean"
+      />
+
+      {/* Export Button */}
+      {inputSource === 'file' && audioBufferRef.current && (
+        <Button
+          onClick={() => setExportDialogOpen(true)}
+          className="w-full bg-gradient-to-r from-green-500 to-emerald-600"
+          size="lg"
+        >
+          <Download className="w-5 h-5 mr-2" />
+          Export Processed Audio (WAV)
+        </Button>
+      )}
+
+      {/* Export Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileAudio className="w-5 h-5" />
+              Export Processed Audio
+            </DialogTitle>
+            <DialogDescription>
+              Render your audio with the current effect chain and download as WAV
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="text-sm">
+              <p className="text-muted-foreground">File: <span className="text-foreground">{audioFileRef.current?.name || 'Unknown'}</span></p>
+              <p className="text-muted-foreground">Effects: <span className="text-foreground">{effects.filter(e => e.enabled).length} active</span></p>
+            </div>
+
+            {exportProgress && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="capitalize">{exportProgress.phase}...</span>
+                  <span>{Math.round(exportProgress.progress * 100)}%</span>
+                </div>
+                <Progress value={exportProgress.progress * 100} />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)} disabled={isExporting}>
+              Cancel
+            </Button>
+            <Button onClick={handleExport} disabled={isExporting}>
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export WAV
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 

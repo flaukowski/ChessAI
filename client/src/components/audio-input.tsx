@@ -11,6 +11,7 @@ interface AudioInputProps {
   onAudioElementReady: (element: HTMLAudioElement) => void;
   onMicrophoneConnect: () => Promise<void>;
   onMicrophoneDisconnect: () => void;
+  onFileLoaded?: (file: File) => void;
   inputSource: 'file' | 'microphone' | null;
   volume: number;
   onVolumeChange: (volume: number) => void;
@@ -21,6 +22,7 @@ export function AudioInput({
   onAudioElementReady,
   onMicrophoneConnect,
   onMicrophoneDisconnect,
+  onFileLoaded,
   inputSource,
   volume,
   onVolumeChange,
@@ -45,6 +47,9 @@ export function AudioInput({
     setLoadedFile(file);
     setMicError(null);
 
+    // Notify parent about the file
+    onFileLoaded?.(file);
+
     // Create object URL and set on audio element
     if (audioRef.current) {
       const url = URL.createObjectURL(file);
@@ -52,7 +57,7 @@ export function AudioInput({
       audioRef.current.load();
       onAudioElementReady(audioRef.current);
     }
-  }, [onAudioElementReady]);
+  }, [onAudioElementReady, onFileLoaded]);
 
   const handleMicrophoneToggle = useCallback(async () => {
     if (inputSource === 'microphone') {
@@ -88,6 +93,10 @@ export function AudioInput({
     if (file && file.type.startsWith('audio/')) {
       setLoadedFile(file);
       setMicError(null);
+
+      // Notify parent about the file
+      onFileLoaded?.(file);
+
       if (audioRef.current) {
         const url = URL.createObjectURL(file);
         audioRef.current.src = url;
@@ -95,7 +104,7 @@ export function AudioInput({
         onAudioElementReady(audioRef.current);
       }
     }
-  }, [onAudioElementReady]);
+  }, [onAudioElementReady, onFileLoaded]);
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
