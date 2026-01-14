@@ -1,13 +1,14 @@
 /**
  * SonicVision Landing Page
- * Beautiful, inspiring landing with 3D visuals, Auth, PWA, and pricing
+ * Beautiful, inspiring landing with 3D visuals, Auth, and PWA
+ * Free and open source under GPL v2
  */
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Music, Sparkles, Zap, Waves, Volume2, Download, 
-  Check, ArrowRight, Star, Headphones, Sliders, Crown
+  ArrowRight, Star, Headphones, Sliders
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +16,6 @@ import { AudioWaveScene } from '@/components/landing/AudioWaveScene';
 import { SpaceChildAuthModal } from '@/components/auth';
 import { PWAInstallPrompt, OfflineIndicator, UpdateBanner } from '@/components/pwa';
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
-import { TIERS, createCheckoutSession } from '@/lib/moneydevkit';
 import { useLocation } from 'wouter';
 
 export default function Landing() {
@@ -30,20 +30,6 @@ export default function Landing() {
     } else {
       setAuthMode('signup');
       setAuthOpen(true);
-    }
-  };
-
-  const handleUpgrade = async () => {
-    if (!isAuthenticated) {
-      setAuthMode('signup');
-      setAuthOpen(true);
-      return;
-    }
-    try {
-      const { url } = await createCheckoutSession('pro');
-      window.location.href = url;
-    } catch (err) {
-      console.error('Checkout failed:', err);
     }
   };
 
@@ -189,96 +175,6 @@ export default function Landing() {
                   </div>
                   <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
                   <p className="text-gray-400">{feature.description}</p>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section className="py-24 px-6 bg-[#1a0a2e]" id="pricing">
-        <div className="max-w-5xl mx-auto">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="text-xl text-gray-400">
-              Start free, upgrade when you're ready
-            </p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {TIERS.map((tier, i) => (
-              <motion.div
-                key={tier.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.15 }}
-              >
-                <Card className={`p-8 h-full flex flex-col ${
-                  tier.id === 'pro' 
-                    ? 'bg-gradient-to-br from-cyan-900/30 to-purple-900/30 border-cyan-500/50 ring-2 ring-cyan-500/20' 
-                    : 'bg-white/5 border-white/10'
-                }`}>
-                  {tier.id === 'pro' && (
-                    <div className="flex items-center gap-2 text-cyan-400 mb-4">
-                      <Crown className="w-5 h-5" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Most Popular</span>
-                    </div>
-                  )}
-                  
-                  <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
-                  
-                  <div className="mb-6">
-                    <span className="text-5xl font-bold">
-                      ${tier.price}
-                    </span>
-                    {tier.price > 0 && (
-                      <span className="text-gray-400 ml-2">/month</span>
-                    )}
-                  </div>
-                  
-                  <ul className="space-y-3 mb-8 flex-1">
-                    {tier.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-3">
-                        <Check className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
-                          tier.id === 'pro' ? 'text-cyan-400' : 'text-gray-500'
-                        }`} />
-                        <span className={tier.id === 'pro' ? 'text-white' : 'text-gray-400'}>
-                          {feature}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  <Button
-                    size="lg"
-                    className={`w-full ${
-                      tier.id === 'pro'
-                        ? 'bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700'
-                        : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                    onClick={tier.id === 'pro' ? handleUpgrade : handleGetStarted}
-                  >
-                    {tier.id === 'pro' ? (
-                      <>
-                        <Zap className="w-5 h-5 mr-2" />
-                        Upgrade to Pro
-                      </>
-                    ) : (
-                      <>
-                        <Music className="w-5 h-5 mr-2" />
-                        Get Started Free
-                      </>
-                    )}
-                  </Button>
                 </Card>
               </motion.div>
             ))}

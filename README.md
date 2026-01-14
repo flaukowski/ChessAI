@@ -27,7 +27,7 @@
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" />
   <img src="https://img.shields.io/badge/Web%20Audio%20API-FF6B6B?style=flat-square&logo=webaudio&logoColor=white" alt="Web Audio API" />
   <img src="https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/license/MIT-blue?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/License-GPL%20v2-blue?style=flat-square" alt="License" />
 </p>
 
 ---
@@ -225,9 +225,9 @@ Your support helps us:
 
 ## 📜 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU General Public License v2** — see the [LICENSE](LICENSE) file for details.
 
-The AudioNoise DSP algorithms are also MIT licensed.
+This is free and open source software. You are free to use, modify, and distribute this software under the terms of the GPL v2.
 
 ---
 
