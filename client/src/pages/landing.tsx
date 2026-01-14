@@ -96,7 +96,7 @@ export default function Landing() {
               <span className="text-sm text-gray-300">Powered by AudioNoise DSP</span>
             </div>
             
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
               AudioNoise Web
             </h1>
             
