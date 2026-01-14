@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 interface PromptSidebarProps {
   onGenerate: (params: GenerationParams) => void;
   isGenerating?: boolean;
+  className?: string;
 }
 
 export interface GenerationParams {
@@ -29,7 +30,7 @@ export interface GenerationParams {
   weirdnessConstraint: number;
 }
 
-export function PromptSidebar({ onGenerate, isGenerating = false }: PromptSidebarProps) {
+export function PromptSidebar({ onGenerate, isGenerating = false, className }: PromptSidebarProps) {
   const [activeTab, setActiveTab] = useState<"music" | "image">("music");
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("indie-pop");
@@ -70,7 +71,7 @@ export function PromptSidebar({ onGenerate, isGenerating = false }: PromptSideba
   };
 
   return (
-    <aside className="w-80 border-r border-border bg-card flex flex-col overflow-hidden" data-testid="prompt-sidebar">
+    <aside className={cn("w-80 border-r border-border bg-card flex flex-col overflow-hidden", className)} data-testid="prompt-sidebar">
       {/* Header */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center gap-3 mb-2">

@@ -104,7 +104,7 @@ export function GenerationHistory({
   };
 
   return (
-    <aside className={cn("w-96 border-l border-border bg-card flex flex-col overflow-hidden", className)} data-testid="generation-history">
+    <aside className={cn("w-96 border-l border-border bg-card flex flex-col overflow-hidden md:w-96", className)} data-testid="generation-history">
       {/* Header */}
       <div className="p-6 border-b border-border">
         <h2 className="text-lg font-bold flex items-center gap-2">
