@@ -1,9 +1,22 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nanoid } from "nanoid";
+import { initializeDefaultUser } from "./auth";
 
 const app = express();
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'space-child-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
+}));
 
 declare module 'http' {
   interface IncomingMessage {
@@ -50,6 +63,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await initializeDefaultUser();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

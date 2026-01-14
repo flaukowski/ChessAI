@@ -16,6 +16,7 @@ import { eq, desc } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   createMusicGeneration(generation: InsertMusicGeneration & { userId?: string }): Promise<MusicGeneration>;
@@ -37,6 +38,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
 
@@ -158,8 +164,18 @@ class InMemoryStorage implements IStorage {
   async getUserByUsername(username: string): Promise<User | undefined> {
     return this.users.find(u => u.username === username);
   }
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return this.users.find(u => u.email === email);
+  }
   async createUser(user: InsertUser): Promise<User> {
-    const u = { id: nanoid(), username: user.username, password: user.password } as User;
+    const u = { 
+      id: nanoid(), 
+      username: user.username, 
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      password: user.password 
+    } as User;
     this.users.push(u);
     return u;
   }
