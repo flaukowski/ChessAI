@@ -26,7 +26,16 @@ import { useBluetoothAudio } from '@/hooks/use-bluetooth-audio';
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { decodePresetFromUrl, initializeDefaultPresets } from '@/lib/preset-manager';
-import { exportToWav, loadAudioFile, downloadWav, type ExportProgress } from '@/lib/dsp/wav-export';
+import {
+  exportAudio,
+  loadAudioFile,
+  downloadAudio,
+  isFormatSupported,
+  FORMAT_INFO,
+  type ExportProgress,
+  type AudioFormat,
+  type ExportOptions,
+} from '@/lib/dsp/audio-export';
 
 export default function Studio() {
   const [, navigate] = useLocation();
@@ -39,6 +48,10 @@ export default function Studio() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<AudioFormat>('wav');
+  const [exportBitrate, setExportBitrate] = useState<128 | 192 | 256 | 320>(192);
+  const [exportBitDepth, setExportBitDepth] = useState<16 | 24 | 32>(16);
+  const [exportNormalize, setExportNormalize] = useState(true);
 
   const audioFileRef = useRef<File | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -108,7 +121,7 @@ export default function Studio() {
     }
   }, []);
 
-  // WAV Export handler
+  // Audio Export handler (supports multiple formats)
   const handleExport = useCallback(async () => {
     if (!audioBufferRef.current || effects.length === 0) {
       return;
@@ -124,17 +137,24 @@ export default function Studio() {
         params: e.params,
       }));
 
-      const wavBlob = await exportToWav(
+      const exportOptions: ExportOptions = {
+        format: exportFormat,
+        normalize: exportNormalize,
+        bitDepth: exportBitDepth,
+        bitrate: exportBitrate,
+      };
+
+      const audioBlob = await exportAudio(
         audioBufferRef.current,
         effectsForExport,
         inputGain,
         outputGain,
-        { normalize: true },
+        exportOptions,
         setExportProgress
       );
 
       const filename = audioFileRef.current?.name?.replace(/\.[^/.]+$/, '') || 'processed';
-      downloadWav(wavBlob, `${filename}-processed.wav`);
+      downloadAudio(audioBlob, `${filename}-processed`, exportFormat);
 
       setExportDialogOpen(false);
     } catch (error) {
@@ -143,7 +163,7 @@ export default function Studio() {
       setIsExporting(false);
       setExportProgress(null);
     }
-  }, [effects, inputGain, outputGain]);
+  }, [effects, inputGain, outputGain, exportFormat, exportNormalize, exportBitDepth, exportBitrate]);
 
   // AI suggestion handlers - map old effect types to new ones
   const handleAISuggestion = useCallback((type: EffectType, params: Record<string, number>) => {
@@ -276,20 +296,20 @@ export default function Studio() {
           size="lg"
         >
           <Download className="w-5 h-5 mr-2" />
-          Export Processed Audio (WAV)
+          Export Processed Audio
         </Button>
       )}
 
       {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileAudio className="w-5 h-5" />
               Export Processed Audio
             </DialogTitle>
             <DialogDescription>
-              Render your audio with the current effect chain and download as WAV
+              Choose a format and render your audio with the current effect chain
             </DialogDescription>
           </DialogHeader>
 
@@ -297,6 +317,99 @@ export default function Studio() {
             <div className="text-sm">
               <p className="text-muted-foreground">File: <span className="text-foreground">{audioFileRef.current?.name || 'Unknown'}</span></p>
               <p className="text-muted-foreground">Effects: <span className="text-foreground">{effects.filter(e => e.enabled).length} active</span></p>
+            </div>
+
+            {/* Format Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Format</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['wav', 'mp3', 'ogg'] as AudioFormat[]).map((format) => {
+                  const info = FORMAT_INFO[format];
+                  const supported = isFormatSupported(format);
+                  return (
+                    <button
+                      key={format}
+                      onClick={() => supported && setExportFormat(format)}
+                      disabled={!supported || isExporting}
+                      className={`p-3 rounded-lg border text-left transition-all ${
+                        exportFormat === format
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-muted-foreground/50'
+                      } ${!supported ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="font-medium text-sm">{info.name}</div>
+                      <div className="text-xs text-muted-foreground">.{info.extension}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">{FORMAT_INFO[exportFormat].description}</p>
+            </div>
+
+            {/* Format-specific options */}
+            {exportFormat === 'wav' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Bit Depth</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([16, 24, 32] as const).map((depth) => (
+                    <button
+                      key={depth}
+                      onClick={() => setExportBitDepth(depth)}
+                      disabled={isExporting}
+                      className={`p-2 rounded-lg border text-sm transition-all ${
+                        exportBitDepth === depth
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-muted-foreground/50'
+                      }`}
+                    >
+                      {depth}-bit {depth === 32 ? '(float)' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {exportFormat === 'mp3' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Bitrate</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {([128, 192, 256, 320] as const).map((rate) => (
+                    <button
+                      key={rate}
+                      onClick={() => setExportBitrate(rate)}
+                      disabled={isExporting}
+                      className={`p-2 rounded-lg border text-sm transition-all ${
+                        exportBitrate === rate
+                          ? 'border-green-500 bg-green-500/10'
+                          : 'border-border hover:border-muted-foreground/50'
+                      }`}
+                    >
+                      {rate}kbps
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Normalize option */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium">Normalize Audio</label>
+                <p className="text-xs text-muted-foreground">Adjust peak level to -1dB</p>
+              </div>
+              <button
+                onClick={() => setExportNormalize(!exportNormalize)}
+                disabled={isExporting}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  exportNormalize ? 'bg-green-500' : 'bg-muted'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    exportNormalize ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
             </div>
 
             {exportProgress && (
@@ -314,7 +427,7 @@ export default function Studio() {
             <Button variant="outline" onClick={() => setExportDialogOpen(false)} disabled={isExporting}>
               Cancel
             </Button>
-            <Button onClick={handleExport} disabled={isExporting}>
+            <Button onClick={handleExport} disabled={isExporting} className="bg-gradient-to-r from-green-500 to-emerald-600">
               {isExporting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -323,7 +436,7 @@ export default function Studio() {
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Export WAV
+                  Export {FORMAT_INFO[exportFormat].name}
                 </>
               )}
             </Button>
