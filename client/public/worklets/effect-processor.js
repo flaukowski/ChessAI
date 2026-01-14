@@ -614,6 +614,146 @@ class LevelMeterProcessor extends AudioWorkletProcessor {
   }
 }
 
+/**
+ * BassPurr Processor
+ * Bass guitar harmonics generator with fundamental, even, and odd harmonic paths
+ * Ported from firmware implementation
+ */
+class BassPurrProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'fundamental', defaultValue: 0.7, minValue: 0, maxValue: 1 },
+      { name: 'even', defaultValue: 0.3, minValue: 0, maxValue: 1 },
+      { name: 'odd', defaultValue: 0.3, minValue: 0, maxValue: 1 },
+      { name: 'tone', defaultValue: 0.5, minValue: 0, maxValue: 1 },
+      { name: 'output', defaultValue: 0.7, minValue: 0, maxValue: 1 },
+      { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
+      { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
+    ];
+  }
+
+  constructor() {
+    super();
+    // Biquad filter states: [z1, z2] for DF2T
+    // Dry HPF approximation (LPF80)
+    this.dryLpfState = [[0, 0], [0, 0]];
+    // Odd path LPF (2nd order)
+    this.oddLpfState = [[0, 0], [0, 0]];
+    // Even path LPF (4th order - two cascaded biquads)
+    this.evenLpfAState = [[0, 0], [0, 0]];
+    this.evenLpfBState = [[0, 0], [0, 0]];
+
+    // LPF @ 80Hz coefficients for fundamental HPF approximation
+    this.lpf80 = {
+      b0: 0.0005, b1: 0.0010, b2: 0.0005,
+      a1: -1.9445, a2: 0.9465
+    };
+
+    // Harmonic LPF coefficient table for different tone settings
+    // 5 steps: ~250Hz, ~500Hz, ~900Hz, ~1500Hz, ~2200Hz
+    this.harmLpfTable = [
+      { b0: 0.0012, b1: 0.0024, b2: 0.0012, a1: -1.8890, a2: 0.8940 },
+      { b0: 0.0047, b1: 0.0094, b2: 0.0047, a1: -1.7786, a2: 0.7974 },
+      { b0: 0.0150, b1: 0.0300, b2: 0.0150, a1: -1.6040, a2: 0.6640 },
+      { b0: 0.0370, b1: 0.0740, b2: 0.0370, a1: -1.4070, a2: 0.5550 },
+      { b0: 0.0700, b1: 0.1400, b2: 0.0700, a1: -1.2000, a2: 0.4800 },
+    ];
+
+    this.lastToneIdx = -1;
+    this.currentHarmCoeffs = this.harmLpfTable[2]; // Default to middle
+  }
+
+  // Biquad step using Direct Form II Transposed
+  biquadStep(x, state, coeffs) {
+    const y = coeffs.b0 * x + state[0];
+    state[0] = coeffs.b1 * x - coeffs.a1 * y + state[1];
+    state[1] = coeffs.b2 * x - coeffs.a2 * y;
+    return y;
+  }
+
+  // Hard clip function
+  hardClip(x) {
+    if (x > 1.0) return 1.0;
+    if (x < -1.0) return -1.0;
+    return x;
+  }
+
+  // Convert tone (0-1) to table index (0-4)
+  toneToIndex(tone) {
+    if (tone <= 0) return 0;
+    if (tone >= 1) return 4;
+    return Math.round(tone * 4);
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const output = outputs[0];
+
+    if (!input || !input[0]) return true;
+
+    const bypass = parameters.bypass[0] > 0.5;
+    const mix = parameters.mix[0];
+    const fundMix = parameters.fundamental[0];
+    const evenMix = parameters.even[0];
+    const oddMix = parameters.odd[0];
+    const tone = parameters.tone[0];
+    const outputLevel = 0.5 + 0.5 * parameters.output[0];
+
+    // Update harmonic LPF coefficients when tone changes
+    const toneIdx = this.toneToIndex(tone);
+    if (toneIdx !== this.lastToneIdx) {
+      this.currentHarmCoeffs = this.harmLpfTable[toneIdx];
+      this.lastToneIdx = toneIdx;
+    }
+
+    const numChannels = Math.min(input.length, output.length, 2);
+    const blockSize = input[0].length;
+
+    for (let ch = 0; ch < numChannels; ch++) {
+      const inputChannel = input[ch];
+      const outputChannel = output[ch];
+
+      for (let i = 0; i < blockSize; i++) {
+        const dry = inputChannel[i];
+
+        if (bypass) {
+          outputChannel[i] = dry;
+        } else {
+          // --- Fundamental channel: gentle HPF @ 80Hz
+          // HPF approximation: x - LPF80(x)
+          const low = this.biquadStep(dry, this.dryLpfState[ch], this.lpf80);
+          const fund = dry - low;
+
+          // --- Odd / 3rd harmonic channel: hard clip -> LPF
+          const oddSrc = this.hardClip(dry * 6.0);
+          const odd = this.biquadStep(oddSrc, this.oddLpfState[ch], this.currentHarmCoeffs);
+
+          // --- Even / 2nd harmonic channel: abs -> 4th order LPF (two cascaded biquads)
+          let evenSrc = dry < 0 ? -dry : dry;
+          evenSrc *= 6.0;
+          let even = this.biquadStep(evenSrc, this.evenLpfAState[ch], this.currentHarmCoeffs);
+          even = this.biquadStep(even, this.evenLpfBState[ch], this.currentHarmCoeffs);
+
+          // --- Mix the three paths
+          let out = fund * fundMix + even * evenMix + odd * oddMix;
+
+          // --- Soft safety (soft limiter)
+          const a = out < 0 ? -out : out;
+          out = out / (1.0 + a);
+
+          // Apply output level
+          const wet = out * outputLevel;
+
+          // Wet/dry mix
+          outputChannel[i] = dry * (1 - mix) + wet * mix;
+        }
+      }
+    }
+
+    return true;
+  }
+}
+
 // Register all processors
 registerProcessor('eq-processor', EQProcessor);
 registerProcessor('distortion-processor', DistortionProcessor);
@@ -621,3 +761,4 @@ registerProcessor('delay-processor', DelayProcessor);
 registerProcessor('chorus-processor', ChorusProcessor);
 registerProcessor('compressor-processor', CompressorProcessor);
 registerProcessor('level-meter-processor', LevelMeterProcessor);
+registerProcessor('basspurr-processor', BassPurrProcessor);

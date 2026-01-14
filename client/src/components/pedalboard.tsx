@@ -149,6 +149,20 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
   },
+  basspurr: {
+    label: 'BassPurr',
+    icon: <Guitar className="w-4 h-4" />,
+    color: 'from-amber-500 to-yellow-500',
+    description: 'Bass harmonics generator with fundamental, even, and odd paths',
+    params: [
+      { key: 'fundamental', label: 'Fundamental', min: 0, max: 1, step: 0.05 },
+      { key: 'even', label: 'Even', min: 0, max: 1, step: 0.05 },
+      { key: 'odd', label: 'Odd', min: 0, max: 1, step: 0.05 },
+      { key: 'tone', label: 'Tone', min: 0, max: 1, step: 0.05 },
+      { key: 'output', label: 'Output', min: 0, max: 1, step: 0.05 },
+      { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
+    ],
+  },
 };
 
 const DISTORTION_MODES = ['Soft Clip', 'Hard Clip', 'Tube'];
@@ -160,6 +174,7 @@ const gradientToKnobColor: Record<string, string> = {
   'from-purple-500 to-pink-500': 'purple',
   'from-green-500 to-teal-500': 'green',
   'from-indigo-500 to-violet-500': 'purple',
+  'from-amber-500 to-yellow-500': 'orange',
 };
 
 // Sortable Effect Card

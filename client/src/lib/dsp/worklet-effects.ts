@@ -50,7 +50,15 @@ export interface CompressorParams {
   makeupGain: number; // 0 to 24 dB
 }
 
-export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams;
+export interface BassPurrParams {
+  fundamental: number; // 0 to 1 - clean fundamental mix
+  even: number;        // 0 to 1 - even (2nd) harmonics mix
+  odd: number;         // 0 to 1 - odd (3rd) harmonics mix
+  tone: number;        // 0 to 1 - harmonic filter cutoff
+  output: number;      // 0 to 1 - output level
+}
+
+export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams;
 
 let workletLoaded = false;
 
@@ -409,9 +417,64 @@ export class LevelMeter {
 }
 
 /**
+ * BassPurr Effect
+ * Bass guitar harmonics generator with fundamental, even, and odd harmonic paths
+ */
+export class BassPurrEffect extends WorkletEffect {
+  private _params: BassPurrParams = {
+    fundamental: 0.7,
+    even: 0.3,
+    odd: 0.3,
+    tone: 0.5,
+    output: 0.7,
+  };
+
+  constructor(context: AudioContext) {
+    super(context, 'basspurr-processor');
+  }
+
+  get params(): BassPurrParams {
+    return { ...this._params };
+  }
+
+  setFundamental(value: number): void {
+    this._params.fundamental = Math.max(0, Math.min(1, value));
+    this.setParam('fundamental', this._params.fundamental);
+  }
+
+  setEven(value: number): void {
+    this._params.even = Math.max(0, Math.min(1, value));
+    this.setParam('even', this._params.even);
+  }
+
+  setOdd(value: number): void {
+    this._params.odd = Math.max(0, Math.min(1, value));
+    this.setParam('odd', this._params.odd);
+  }
+
+  setTone(value: number): void {
+    this._params.tone = Math.max(0, Math.min(1, value));
+    this.setParam('tone', this._params.tone);
+  }
+
+  setOutput(value: number): void {
+    this._params.output = Math.max(0, Math.min(1, value));
+    this.setParam('output', this._params.output);
+  }
+
+  setAllParams(params: Partial<BassPurrParams>): void {
+    if (params.fundamental !== undefined) this.setFundamental(params.fundamental);
+    if (params.even !== undefined) this.setEven(params.even);
+    if (params.odd !== undefined) this.setOdd(params.odd);
+    if (params.tone !== undefined) this.setTone(params.tone);
+    if (params.output !== undefined) this.setOutput(params.output);
+  }
+}
+
+/**
  * Effect type enum for the factory
  */
-export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor';
+export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr';
 
 /**
  * Default parameters for each effect type
@@ -454,6 +517,14 @@ export const defaultWorkletParams: Record<WorkletEffectType, Record<string, numb
     makeupGain: 0,
     mix: 1,
   },
+  basspurr: {
+    fundamental: 0.7,
+    even: 0.3,
+    odd: 0.3,
+    tone: 0.5,
+    output: 0.7,
+    mix: 1,
+  },
 };
 
 /**
@@ -474,6 +545,8 @@ export function createWorkletEffect(
       return new ChorusEffect(context);
     case 'compressor':
       return new CompressorEffect(context);
+    case 'basspurr':
+      return new BassPurrEffect(context);
     default:
       throw new Error(`Unknown effect type: ${type}`);
   }
