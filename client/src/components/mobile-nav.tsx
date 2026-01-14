@@ -13,10 +13,10 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface MobileNavProps {
-  activeView: 'generate' | 'dsp' | 'routing';
-  onViewChange: (view: 'generate' | 'dsp' | 'routing') => void;
-  onOpenPrompt: () => void;
-  onOpenHistory: () => void;
+  activeView: 'dsp' | 'routing';
+  onViewChange: (view: 'dsp' | 'routing') => void;
+  onOpenPrompt?: () => void;
+  onOpenHistory?: () => void;
   isGenerating?: boolean;
 }
 
@@ -28,7 +28,6 @@ export function MobileNav({
   isGenerating = false 
 }: MobileNavProps) {
   const tabs = [
-    { id: 'generate' as const, label: 'Create', icon: Music },
     { id: 'dsp' as const, label: 'Effects', icon: Waves },
     { id: 'routing' as const, label: 'Channels', icon: Bluetooth },
   ];
@@ -36,15 +35,6 @@ export function MobileNav({
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-area-bottom">
       <div className="flex items-center justify-around h-16 px-2">
-        {/* Prompt Button */}
-        <button
-          onClick={onOpenPrompt}
-          className="flex flex-col items-center justify-center w-14 h-14 rounded-xl transition-colors text-muted-foreground hover:text-primary active:scale-95"
-        >
-          <PenTool className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5 font-medium">Prompt</span>
-        </button>
-
         {/* Main Tabs */}
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -78,34 +68,7 @@ export function MobileNav({
           );
         })}
 
-        {/* History Button */}
-        <button
-          onClick={onOpenHistory}
-          className="flex flex-col items-center justify-center w-14 h-14 rounded-xl transition-colors text-muted-foreground hover:text-primary active:scale-95"
-        >
-          <Clock className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5 font-medium">History</span>
-        </button>
       </div>
-
-      {/* Floating Generate Button */}
-      <motion.div
-        className="absolute -top-8 left-1/2 -translate-x-1/2"
-        whileTap={{ scale: 0.95 }}
-      >
-        <Button
-          size="lg"
-          disabled={isGenerating}
-          onClick={onOpenPrompt}
-          className="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-purple-600 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow"
-        >
-          {isGenerating ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Sparkles className="w-5 h-5" />
-          )}
-        </Button>
-      </motion.div>
     </nav>
   );
 }
@@ -120,7 +83,7 @@ interface MobileHeaderProps {
   onHomeClick?: () => void;
 }
 
-export function MobileHeader({ title = "SonicVision", onMenuClick, onHomeClick }: MobileHeaderProps) {
+export function MobileHeader({ title = "AudioNoise", onMenuClick, onHomeClick }: MobileHeaderProps) {
   return (
     <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-lg border-b border-border safe-area-top">
       <div className="flex items-center justify-between h-14 px-4">

@@ -1,14 +1,15 @@
 /**
- * SonicVision Landing Page
- * Beautiful, inspiring landing with 3D visuals, Auth, and PWA
+ * AudioNoise Web Landing Page
+ * Real-time audio DSP effects in your browser
+ * Ported from torvalds/AudioNoise C algorithms
  * Free and open source under GPL v2
  */
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Music, Sparkles, Zap, Waves, Volume2, Download, 
-  ArrowRight, Star, Headphones, Sliders
+  Sparkles, Zap, Waves, Volume2, Download, 
+  ArrowRight, Star, Headphones, Sliders, Mic, FileAudio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -35,29 +36,29 @@ export default function Landing() {
 
   const features = [
     {
-      icon: <Sparkles className="w-6 h-6" />,
-      title: 'AI Music Generation',
-      description: 'Create stunning original music with state-of-the-art AI models',
-    },
-    {
       icon: <Waves className="w-6 h-6" />,
-      title: 'AudioNoise DSP',
-      description: 'Professional-grade real-time audio effects powered by AudioNoise',
+      title: 'AudioNoise DSP Engine',
+      description: 'Professional-grade real-time audio effects ported from C guitar pedal algorithms',
     },
     {
       icon: <Sliders className="w-6 h-6" />,
-      title: 'Real-time Processing',
-      description: 'Apply effects in real-time with zero latency audio processing',
+      title: 'Zero Latency Processing',
+      description: 'Single sample in, single sample out - sub-millisecond audio processing',
+    },
+    {
+      icon: <FileAudio className="w-6 h-6" />,
+      title: 'Biquad Filters',
+      description: 'Low-pass, high-pass, band-pass, notch, and all-pass IIR filters',
+    },
+    {
+      icon: <Mic className="w-6 h-6" />,
+      title: 'Live Input',
+      description: 'Process microphone input or audio files in real-time',
     },
     {
       icon: <Headphones className="w-6 h-6" />,
-      title: 'Hi-Fi Export',
-      description: 'Export your creations in studio-quality WAV and 320kbps MP3',
-    },
-    {
-      icon: <Zap className="w-6 h-6" />,
-      title: 'Stem Separation',
-      description: 'Extract vocals, drums, bass, and other instruments from any track',
+      title: 'Classic Effects',
+      description: 'Echo, flanger, phaser, and LFO modulation like vintage guitar pedals',
     },
     {
       icon: <Download className="w-6 h-6" />,
@@ -69,7 +70,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#0a0118] text-white overflow-x-hidden">
       {/* PWA Components */}
-      <PWAInstallPrompt appName="SonicVision" />
+      <PWAInstallPrompt appName="AudioNoise" />
       <OfflineIndicator />
       <UpdateBanner />
       
@@ -96,12 +97,12 @@ export default function Landing() {
             </div>
             
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Create Music with AI
+              AudioNoise Web
             </h1>
             
             <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto mb-10">
-              Transform your ideas into stunning audio with next-gen AI music generation 
-              and professional DSP effects
+              Real-time audio processing in your browser. Biquad filters, echo, flanger, 
+              phaser — all with sub-millisecond latency.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -110,8 +111,8 @@ export default function Landing() {
                 onClick={handleGetStarted}
                 className="text-lg px-8 py-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 border-0"
               >
-                <Music className="w-5 h-5 mr-2" />
-                Start Creating Free
+                <Waves className="w-5 h-5 mr-2" />
+                Open Studio
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               
@@ -200,12 +201,12 @@ export default function Landing() {
               ))}
             </div>
             <blockquote className="text-2xl md:text-3xl font-light mb-6 text-gray-200">
-              "SonicVision has completely transformed how I create music. 
-              The AI generation combined with the AudioNoise DSP effects is 
-              <span className="text-cyan-400"> absolutely incredible</span>."
+              "The main design goal has been to learn about digital audio processing basics. 
+              Just IIR filters and basic delay loops. Everything is single sample in, 
+              <span className="text-cyan-400">single sample out with no latency</span>."
             </blockquote>
             <p className="text-gray-400">
-              — Independent Music Producer
+              — Linus Torvalds, AudioNoise README
             </p>
           </motion.div>
         </div>
@@ -223,7 +224,7 @@ export default function Landing() {
               Ready to Create?
             </h2>
             <p className="text-xl text-gray-400 mb-10">
-              Join thousands of creators making music with SonicVision
+              Process audio with professional DSP effects — free and open source
             </p>
             <Button 
               size="lg"
@@ -243,8 +244,8 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <Volume2 className="w-6 h-6 text-cyan-400" />
-            <span className="font-bold text-xl">SonicVision</span>
-            <span className="text-gray-500 text-sm">powered by AudioNoise DSP</span>
+            <span className="font-bold text-xl">AudioNoise Web</span>
+            <span className="text-gray-500 text-sm">ported from torvalds/AudioNoise</span>
           </div>
           
           <div className="flex items-center gap-6 text-sm text-gray-400">
@@ -262,7 +263,7 @@ export default function Landing() {
           </div>
           
           <p className="text-sm text-gray-500">
-            © 2025 SonicVision. All rights reserved.
+            © 2025 AudioNoise Web. GPL v2 License.
           </p>
         </div>
       </footer>

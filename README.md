@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/SonicVision-AI%20Music%20Creation-gradient?style=for-the-badge&labelColor=0d1117&color=06b6d4" alt="SonicVision" />
+  <img src="https://img.shields.io/badge/AudioNoise%20Web-Real--Time%20DSP-gradient?style=for-the-badge&labelColor=0d1117&color=06b6d4" alt="AudioNoise Web" />
 </p>
 
 <h1 align="center">
   <br>
-  🎵 SonicVision
+  🎛️ AudioNoise Web
   <br>
-  <sub>Powered by AudioNoise DSP</sub>
+  <sub>Real-time audio DSP in your browser</sub>
 </h1>
 
 <p align="center">
-  <strong>Next-generation AI music creation platform with real-time DSP effects</strong>
+  <strong>Professional-grade audio effects ported from torvalds/AudioNoise C algorithms</strong>
 </p>
 
 <p align="center">
@@ -34,22 +34,13 @@
 
 ## ✨ The Vision
 
-**SonicVision** bridges the gap between AI-powered music generation and professional audio processing. Create music with AI, then sculpt it with studio-grade DSP effects—all in your browser.
+**AudioNoise Web** brings professional guitar pedal DSP effects to your browser. Process audio in real-time with sub-millisecond latency using algorithms ported from Linus Torvalds' [AudioNoise](https://github.com/torvalds/AudioNoise) C library.
 
-> *"What if creating professional-sounding music was as simple as describing what you want to hear?"*
-
-We're building the future of music creation: **intuitive**, **powerful**, and **accessible to everyone**.
+> *"The main design goal has been to learn about digital audio processing basics. Just IIR filters and basic delay loops. Everything is single sample in, single sample out with no latency."* — Linus Torvalds
 
 ---
 
 ## 🚀 Features
-
-### 🤖 AI Music Generation
-- **Natural Language Prompts** — Describe your music in plain English
-- **Style Selection** — Choose from indie-pop, electronic, ambient, lo-fi, and more
-- **Multiple AI Models** — V5, V4, V3.5 generation engines
-- **Vocal Options** — Instrumental, male vocals, female vocals
-- **Advanced Controls** — Style weight, creativity sliders, negative tags
 
 ### 🎛️ AudioNoise DSP Engine
 Real-time audio processing ported from C-based guitar pedal algorithms:
@@ -59,25 +50,27 @@ Real-time audio processing ported from C-based guitar pedal algorithms:
 | **Echo** | Delay with feedback and LFO modulation |
 | **Flanger** | Classic modulated delay sweeping |
 | **Phaser** | 4-stage allpass cascade with LFO |
-| **Low Pass** | Warm tone shaping filter |
+| **Low Pass** | Warm tone shaping biquad filter |
 | **High Pass** | Clean up muddy frequencies |
 | **Band Pass** | Isolate frequency ranges |
 | **Notch** | Surgical frequency removal |
+| **All Pass** | Phase shifting without amplitude change |
 
 ### 📊 Real-Time Visualization
 - **Waveform** — Time-domain audio visualization
 - **Spectrum Analyzer** — Frequency distribution bars
 - **Spectrogram** — Scrolling frequency/time heatmap
 
-### 🧠 AI Effect Suggestions
-- Analyzes your audio in real-time
-- Recommends effects based on genre and frequency profile
-- One-click effect application with optimized parameters
-
 ### 🎤 Multiple Input Sources
-- **File Upload** — Process any audio file
+- **File Upload** — Process any audio file (MP3, WAV, OGG)
 - **Microphone** — Live real-time processing
-- **AI Generated** — Process your AI creations
+- **Bluetooth** — Multi-channel instrument routing
+
+### 🤖 Optional AI Effect Suggestions
+- Bring your own API key (OpenAI, Anthropic, Ollama, or custom)
+- Analyzes your audio in real-time
+- Recommends effects based on frequency profile
+- One-click effect application with optimized parameters
 
 ---
 
@@ -85,8 +78,8 @@ Real-time audio processing ported from C-based guitar pedal algorithms:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sonicvision.git
-cd sonicvision
+git clone https://github.com/yourusername/audionoise-web.git
+cd audionoise-web
 
 # Install dependencies
 npm install
@@ -151,7 +144,7 @@ const freqData = audioEngine.getFrequencyData();
 ## 🏗️ Architecture
 
 ```
-sonicvision/
+audionoise-web/
 ├── client/                 # React frontend
 │   ├── src/
 │   │   ├── components/     # UI components
@@ -192,17 +185,17 @@ sonicvision/
 We love contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
 
 **Quick contribution ideas:**
-- 🎸 Port more effects from AudioNoise (FM synthesis, distortion)
-- 🎨 Improve visualizations (3D, reactive animations)
+- 🎸 Port more effects from AudioNoise (FM synthesis, AM synthesis, distortion)
+- 📊 Add FFT frequency-domain analysis (see [issue #37](https://github.com/torvalds/AudioNoise/issues/37))
+- 🎛️ Add granular synthesis controls (see [issue #40](https://github.com/torvalds/AudioNoise/issues/40))
 - 🧪 Add unit tests for DSP algorithms
 - 📱 Improve mobile responsiveness
-- 🌍 Add internationalization
 
 ---
 
 ## 💖 Support the Project
 
-If SonicVision helps you create amazing music, consider supporting development:
+If AudioNoise Web helps you process audio, consider supporting development:
 
 ### Ethereum / EVM Chains
 ```
@@ -216,9 +209,9 @@ REDACTED_WALLET_ADDRESS
 </p>
 
 Your support helps us:
-- 🚀 Develop new features
-- 🎵 Improve AI music quality
-- 🔊 Add more DSP effects
+- 🚀 Port more effects from AudioNoise
+- 🔊 Add FFT visualization and analysis
+- 📱 Improve mobile experience
 - 📚 Create tutorials and documentation
 
 ---
@@ -241,9 +234,9 @@ This is free and open source software. You are free to use, modify, and distribu
 ---
 
 <p align="center">
-  <strong>Built with 💜 for musicians, by musicians</strong>
+  <strong>Built with 💜 for audio enthusiasts</strong>
 </p>
 
 <p align="center">
-  <sub>SonicVision — Where AI meets Audio Engineering</sub>
+  <sub>AudioNoise Web — Real-time DSP in your browser</sub>
 </p>
