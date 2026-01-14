@@ -1,0 +1,158 @@
+#include <stdint.h>
+
+typedef struct {
+    float b0, b1, b2;
+    float a1, a2;     // note: a0 normalized to 1.0
+    float z1, z2;     // DF2T state
+} biquad_state;
+
+static inline float biquad_step(biquad_state *s, float x)
+{
+    // Direct Form II Transposed
+    float y = s->b0 * x + s->z1;
+    s->z1 = s->b1 * x - s->a1 * y + s->z2;
+    s->z2 = s->b2 * x - s->a2 * y;
+    return y;
+}
+
+static inline void biquad_load(biquad_state *s,
+                               float b0, float b1, float b2,
+                               float a1, float a2)
+{
+    s->b0 = b0; s->b1 = b1; s->b2 = b2;
+    s->a1 = a1; s->a2 = a2;
+    s->z1 = 0.0f; s->z2 = 0.0f;
+}
+
+static inline float hard_clip(float x)
+{
+    if (x > 1.0f) return 1.0f;
+    if (x < -1.0f) return -1.0f;
+    return x;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Coeff tables (STATIC)                                               */
+/*  You must generate these offline for your actual Fs and cutoffs.     */
+/*  Shown numbers are PLACEHOLDERS until you paste real ones.           */
+/* ------------------------------------------------------------------ */
+
+typedef struct { float b0,b1,b2,a1,a2; } biquad_coeff;
+
+// Example tone table with 5 LPF cutoffs (e.g., 250, 500, 900, 1500, 2200 Hz)
+// Replace with real coefficients generated offline for your sample rate.
+enum { TONE_STEPS = 5 };
+
+// LPF @ 80 Hz used for "fundamental HPF approximation" (dry = x - LPF80(x))
+static const biquad_coeff LPF80 = {
+    // PLACEHOLDER COEFFS
+    .b0 = 0.0005f, .b1 = 0.0010f, .b2 = 0.0005f,
+    .a1 = -1.9445f, .a2 = 0.9465f
+};
+
+static const biquad_coeff HARM_LPF[TONE_STEPS] = {
+    // PLACEHOLDER COEFFS — replace these
+    // step 0: ~250 Hz
+    { .b0=0.0012f, .b1=0.0024f, .b2=0.0012f, .a1=-1.8890f, .a2=0.8940f },
+    // step 1: ~500 Hz
+    { .b0=0.0047f, .b1=0.0094f, .b2=0.0047f, .a1=-1.7786f, .a2=0.7974f },
+    // step 2: ~900 Hz
+    { .b0=0.0150f, .b1=0.0300f, .b2=0.0150f, .a1=-1.6040f, .a2=0.6640f },
+    // step 3: ~1500 Hz
+    { .b0=0.0370f, .b1=0.0740f, .b2=0.0370f, .a1=-1.4070f, .a2=0.5550f },
+    // step 4: ~2200 Hz
+    { .b0=0.0700f, .b1=0.1400f, .b2=0.0700f, .a1=-1.2000f, .a2=0.4800f },
+};
+
+/* ------------------------------------------------------------------ */
+/*  Effect state                                                        */
+/* ------------------------------------------------------------------ */
+
+static struct {
+    // Dry fundamental HPF approximation: x - LPF80(x)
+    biquad_state dry_lpf;
+
+    // Odd path: clip -> 2nd order LPF
+    biquad_state odd_lpf;
+
+    // Even path: abs -> 4th order LPF (two cascaded biquads)
+    biquad_state even_lpf_a;
+    biquad_state even_lpf_b;
+
+    // Pots (0..1)
+    float fund_mix;
+    float even_mix;
+    float odd_mix;
+    float output;
+
+    // Cached tone index
+    uint8_t tone_idx;
+} basspurr_fw;
+
+static inline uint8_t tone_to_index(float tone)
+{
+    // tone in [0..1] -> table index [0..TONE_STEPS-1]
+    if (tone <= 0.0f) return 0;
+    if (tone >= 1.0f) return (uint8_t)(TONE_STEPS - 1);
+    // cheap mapping (no float heavy ops needed)
+    uint32_t idx = (uint32_t)(tone * (float)(TONE_STEPS - 1) + 0.5f);
+    if (idx >= TONE_STEPS) idx = TONE_STEPS - 1;
+    return (uint8_t)idx;
+}
+
+static inline void basspurr_init_fw(float pot_fund, float pot_even, float pot_odd,
+                                   float pot_out, float pot_tone)
+{
+    basspurr_fw.fund_mix = pot_fund;
+    basspurr_fw.even_mix = pot_even;
+    basspurr_fw.odd_mix  = pot_odd;
+    basspurr_fw.output   = 0.5f + 0.5f * pot_out;
+
+    basspurr_fw.tone_idx = tone_to_index(pot_tone);
+
+    // Load static coefficients (NO runtime biquad design)
+    biquad_load(&basspurr_fw.dry_lpf,
+                LPF80.b0, LPF80.b1, LPF80.b2, LPF80.a1, LPF80.a2);
+
+    const biquad_coeff *hc = &HARM_LPF[basspurr_fw.tone_idx];
+
+    biquad_load(&basspurr_fw.odd_lpf,
+                hc->b0, hc->b1, hc->b2, hc->a1, hc->a2);
+
+    biquad_load(&basspurr_fw.even_lpf_a,
+                hc->b0, hc->b1, hc->b2, hc->a1, hc->a2);
+
+    biquad_load(&basspurr_fw.even_lpf_b,
+                hc->b0, hc->b1, hc->b2, hc->a1, hc->a2);
+}
+
+static inline float basspurr_step_fw(float in)
+{
+    // --- Fundamental channel (recipe): gentle HPF @ 80Hz
+    // Firmware-friendly HPF approximation using only LPF:
+    // HPF ≈ x - LPF80(x)
+    float low = biquad_step(&basspurr_fw.dry_lpf, in);
+    float fund = in - low;
+
+    // --- Odd / 3rd channel (recipe): full clip -> steep LPF (2nd order here)
+    float odd_src = hard_clip(in * 6.0f);   // "harsh saturation"
+    float odd = biquad_step(&basspurr_fw.odd_lpf, odd_src);
+
+    // --- Even / 2nd channel (recipe): abs -> very steep LPF (4th order here)
+    float even_src = (in < 0.0f) ? -in : in;   // fabsf without libm
+    even_src *= 6.0f;
+    float even = biquad_step(&basspurr_fw.even_lpf_a, even_src);
+    even = biquad_step(&basspurr_fw.even_lpf_b, even);
+
+    // --- Mix pots: fundamental / even / odd
+    float out =
+        fund * basspurr_fw.fund_mix +
+        even * basspurr_fw.even_mix +
+        odd  * basspurr_fw.odd_mix;
+
+    // Simple soft safety
+    float a = (out < 0.0f) ? -out : out;
+    out = out / (1.0f + a);
+
+    return out * basspurr_fw.output;
+}
