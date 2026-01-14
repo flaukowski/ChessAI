@@ -90,7 +90,9 @@ export class PedalboardEngine {
   async initialize(): Promise<void> {
     if (this.state.isInitialized) return;
 
-    this.context = new AudioContext({ sampleRate: 48000 });
+    if (!this.context) {
+      this.context = new AudioContext({ sampleRate: 48000 });
+    }
 
     // Load AudioWorklet processors
     await loadEffectWorklets(this.context);
