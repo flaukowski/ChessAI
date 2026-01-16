@@ -106,7 +106,7 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
     params: [
       { key: 'drive', label: 'Drive', min: 0, max: 1, step: 0.05 },
       { key: 'tone', label: 'Tone', min: 0, max: 1, step: 0.05 },
-      { key: 'mode', label: 'Mode', min: 0, max: 2, step: 1 },
+      { key: 'mode', label: 'Mode', min: 0, max: 6, step: 1 },
       { key: 'level', label: 'Level', min: 0, max: 1, step: 0.05 },
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
@@ -163,9 +163,22 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
   },
+  tremolo: {
+    label: 'Tremolo',
+    icon: <Volume2 className="w-4 h-4" />,
+    color: 'from-rose-500 to-pink-500',
+    description: 'Classic LFO-modulated amplitude for pulsing dynamics',
+    params: [
+      { key: 'rate', label: 'Rate', min: 0.5, max: 15, step: 0.5, unit: 'Hz' },
+      { key: 'depth', label: 'Depth', min: 0, max: 1, step: 0.05 },
+      { key: 'waveform', label: 'Wave', min: 0, max: 1, step: 1 },
+      { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
+    ],
+  },
 };
 
-const DISTORTION_MODES = ['Soft Clip', 'Hard Clip', 'Tube'];
+// Extended distortion modes including new waveshaper primitives from AudioNoise PR #64
+const DISTORTION_MODES = ['Soft Clip', 'Hard Clip', 'Tube', 'Quadratic', 'Foldback', 'Tube Clip', 'Diode'];
 
 // Gradient to knob color mapping
 const gradientToKnobColor: Record<string, string> = {
@@ -175,7 +188,10 @@ const gradientToKnobColor: Record<string, string> = {
   'from-green-500 to-teal-500': 'green',
   'from-indigo-500 to-violet-500': 'purple',
   'from-amber-500 to-yellow-500': 'orange',
+  'from-rose-500 to-pink-500': 'pink',
 };
+
+const TREMOLO_WAVEFORMS = ['Sine', 'Triangle'];
 
 // Sortable Effect Card
 interface SortableEffectCardProps {
@@ -311,6 +327,31 @@ function SortableEffectCard({
                         {DISTORTION_MODES.map((mode, idx) => (
                           <SelectItem key={idx} value={String(idx)}>
                             {mode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+
+              // Special handling for tremolo waveform
+              if (param.key === 'waveform' && effect.type === 'tremolo') {
+                return (
+                  <div key={param.key} className="flex flex-col items-center gap-1">
+                    <Label className="text-xs text-muted-foreground">{param.label}</Label>
+                    <Select
+                      value={String(effect.params[param.key] || 0)}
+                      onValueChange={(v) => onParamChange(param.key, parseInt(v))}
+                      disabled={!effect.enabled}
+                    >
+                      <SelectTrigger className="w-24 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TREMOLO_WAVEFORMS.map((waveform, idx) => (
+                          <SelectItem key={idx} value={String(idx)}>
+                            {waveform}
                           </SelectItem>
                         ))}
                       </SelectContent>

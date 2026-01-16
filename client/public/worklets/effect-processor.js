@@ -190,14 +190,15 @@ class EQProcessor extends AudioWorkletProcessor {
 
 /**
  * Distortion Processor
- * Hard clip, soft clip, and tube-style saturation
+ * Hard clip, soft clip, tube-style saturation, and extended waveshaper primitives
+ * Includes foldback, tube_clip, and diode_clip from AudioNoise PR #64
  */
 class DistortionProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
       { name: 'drive', defaultValue: 0.5, minValue: 0, maxValue: 1 },
       { name: 'tone', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-      { name: 'mode', defaultValue: 0, minValue: 0, maxValue: 3 }, // 0=soft, 1=hard, 2=tube, 3=quadratic
+      { name: 'mode', defaultValue: 0, minValue: 0, maxValue: 6 }, // 0=soft, 1=hard, 2=tube, 3=quadratic, 4=foldback, 5=tube_clip, 6=diode
       { name: 'level', defaultValue: 0.5, minValue: 0, maxValue: 1 },
       { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
       { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
@@ -257,6 +258,59 @@ class DistortionProcessor extends AudioWorkletProcessor {
     return scaled * 2.0 / k;
   }
 
+  // ========== Extended Waveshaper Primitives from AudioNoise PR #64 ==========
+
+  // Foldback distortion - synth-fuzz tones with complex harmonics
+  // Signal reflects when it exceeds threshold, creating rich overtones
+  foldBack(x, drive) {
+    const threshold = 1.0 - drive * 0.8; // Higher drive = lower threshold
+    if (threshold <= 0) return 0;
+
+    let iterations = 0;
+    let result = x * (1 + drive * 3); // Pre-gain based on drive
+
+    while ((result > threshold || result < -threshold) && iterations++ < 16) {
+      if (result > threshold) {
+        result = 2 * threshold - result;
+      } else {
+        result = -2 * threshold - result;
+      }
+    }
+    return result;
+  }
+
+  // Tube clip - soft saturation using polynomial approximation
+  // y = x * (1.5 - 0.5 * x²) produces gentle compression similar to tube saturation
+  tubeClip(x, drive) {
+    const k = 1 + drive * 4;
+    let scaled = x * k;
+
+    // Clamp input to valid range
+    if (scaled > 1.5) scaled = 1.5;
+    if (scaled < -1.5) scaled = -1.5;
+
+    const x2 = scaled * scaled;
+    return scaled * (1.5 - 0.5 * x2) / k;
+  }
+
+  // Helper for diode clip - soft limiting: x / (1 + |x|)
+  _wsSoftClip(x) {
+    return x / (1 + Math.abs(x));
+  }
+
+  // Diode clip - asymmetric harmonic generation
+  // Emulates silicon diode characteristics with configurable asymmetry
+  diodeClip(x, drive) {
+    const ratio = 0.3 + drive * 1.4; // Asymmetry ratio varies with drive
+    const k = 1 + drive * 5;
+    const scaled = x * k;
+
+    const pos = this._wsSoftClip(scaled);
+    const neg = this._wsSoftClip(scaled * ratio) / ratio;
+
+    return (scaled >= 0 ? pos : neg) / k;
+  }
+
   process(inputs, outputs, parameters) {
     const input = inputs[0];
     const output = outputs[0];
@@ -303,6 +357,15 @@ class DistortionProcessor extends AudioWorkletProcessor {
               break;
             case 3:
               distorted = this.quadraticClip(dry, drive);
+              break;
+            case 4:
+              distorted = this.foldBack(dry, drive);
+              break;
+            case 5:
+              distorted = this.tubeClip(dry, drive);
+              break;
+            case 6:
+              distorted = this.diodeClip(dry, drive);
               break;
             default:
               distorted = this.softClip(dry, drive);
@@ -796,6 +859,93 @@ class BassPurrProcessor extends AudioWorkletProcessor {
   }
 }
 
+/**
+ * Tremolo Processor
+ * LFO-modulated amplitude effect - ported from AudioNoise tremolo.h
+ * Processes input audio by modulating its amplitude using an LFO
+ */
+class TremoloProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'rate', defaultValue: 5, minValue: 0.5, maxValue: 15 },    // LFO rate in Hz
+      { name: 'depth', defaultValue: 0.5, minValue: 0, maxValue: 1 },    // Modulation depth 0-100%
+      { name: 'waveform', defaultValue: 0, minValue: 0, maxValue: 1 },   // 0=sine, 1=triangle
+      { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
+      { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
+    ];
+  }
+
+  constructor() {
+    super();
+    // LFO phase (0-1)
+    this.phase = 0;
+  }
+
+  // Generate LFO value based on waveform type
+  // Returns value in range -1 to 1
+  getLfoValue(waveform) {
+    if (waveform < 0.5) {
+      // Sine wave
+      return Math.sin(TWO_PI * this.phase);
+    } else {
+      // Triangle wave: convert phase to triangle
+      // 0->0.25: 0->1, 0.25->0.75: 1->-1, 0.75->1: -1->0
+      const p = this.phase;
+      if (p < 0.25) {
+        return p * 4;
+      } else if (p < 0.75) {
+        return 1 - (p - 0.25) * 4;
+      } else {
+        return -1 + (p - 0.75) * 4;
+      }
+    }
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const output = outputs[0];
+
+    if (!input || !input[0]) return true;
+
+    const bypass = parameters.bypass[0] > 0.5;
+    const mix = parameters.mix[0];
+    const rate = parameters.rate[0];
+    const depth = parameters.depth[0];
+    const waveform = parameters.waveform[0];
+
+    const phaseIncrement = rate / sampleRate;
+    const numChannels = Math.min(input.length, output.length);
+    const blockSize = input[0].length;
+
+    for (let i = 0; i < blockSize; i++) {
+      // Get LFO value (-1 to 1)
+      const lfo = this.getLfoValue(waveform);
+
+      // Calculate gain multiplier
+      // When LFO = 1, gain = 1 (no attenuation)
+      // When LFO = -1, gain = 1 - depth (maximum attenuation)
+      // Formula from AudioNoise: 1.0 - depth * (1.0 - lfo) * 0.5
+      const gain = 1.0 - depth * (1.0 - lfo) * 0.5;
+
+      for (let ch = 0; ch < numChannels; ch++) {
+        const dry = input[ch][i];
+
+        if (bypass) {
+          output[ch][i] = dry;
+        } else {
+          const wet = dry * gain;
+          output[ch][i] = dry * (1 - mix) + wet * mix;
+        }
+      }
+
+      // Advance LFO phase
+      this.phase = (this.phase + phaseIncrement) % 1;
+    }
+
+    return true;
+  }
+}
+
 // Register all processors
 registerProcessor('eq-processor', EQProcessor);
 registerProcessor('distortion-processor', DistortionProcessor);
@@ -804,3 +954,4 @@ registerProcessor('chorus-processor', ChorusProcessor);
 registerProcessor('compressor-processor', CompressorProcessor);
 registerProcessor('level-meter-processor', LevelMeterProcessor);
 registerProcessor('basspurr-processor', BassPurrProcessor);
+registerProcessor('tremolo-processor', TremoloProcessor);
