@@ -1,14 +1,15 @@
 /**
  * Space Child Auth Client Library
- * Unified authentication for SonicVision - connects to Space-Child-Dream auth API
+ * Unified authentication for ChessAI/SonicVision
  */
 
-// Auth API base URL - points to Space-Child-Dream
+// Auth API base URL
 const AUTH_BASE_URL = '/api/space-child-auth';
 
 export interface User {
   id: string;
   email: string;
+  username?: string;
   firstName?: string;
   lastName?: string;
   emailVerified: boolean;
@@ -88,16 +89,27 @@ export async function login(params: LoginParams): Promise<AuthResponse> {
     body: JSON.stringify(params),
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    const errorData = await response.json();
-    const error: AuthError = new Error(errorData.error || 'Login failed');
-    error.requiresVerification = errorData.requiresVerification;
+    const error: AuthError = new Error(data.message || data.error || 'Login failed');
+    error.requiresVerification = data.requiresVerification;
     error.statusCode = response.status;
     throw error;
   }
 
-  const data: AuthResponse = await response.json();
-  setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  if (data.accessToken && data.refreshToken) {
+    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  }
+  
+  // If login succeeded but requires verification, throw with flag
+  if (data.requiresVerification) {
+    const error: AuthError = new Error('Email verification required');
+    error.requiresVerification = true;
+    // Still store tokens so user can access their account
+    throw error;
+  }
+  
   return data;
 }
 
@@ -148,26 +160,31 @@ export async function getCurrentUser(): Promise<User | null> {
     return null;
   }
 
-  const response = await fetch(`${AUTH_BASE_URL}/user`, {
-    headers: {
-      'Authorization': `Bearer ${tokens.accessToken}`,
-    },
-  });
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/user`, {
+      headers: {
+        'Authorization': `Bearer ${tokens.accessToken}`,
+      },
+    });
 
-  if (response.status === 401) {
-    const refreshed = await refreshAccessToken();
-    if (!refreshed) {
-      clearStoredTokens();
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (!refreshed) {
+        clearStoredTokens();
+        return null;
+      }
+      return getCurrentUser();
+    }
+
+    if (!response.ok) {
       return null;
     }
-    return getCurrentUser();
-  }
 
-  if (!response.ok) {
+    return response.json();
+  } catch (e) {
+    console.error('Get current user error:', e);
     return null;
   }
-
-  return response.json();
 }
 
 export async function refreshAccessToken(): Promise<boolean> {
@@ -198,7 +215,7 @@ export async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
-export async function verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
+export async function verifyEmail(token: string): Promise<{ success: boolean; message: string; user?: User; accessToken?: string; refreshToken?: string }> {
   const response = await fetch(`${AUTH_BASE_URL}/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -208,7 +225,12 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
   const data = await response.json();
   
   if (!response.ok) {
-    throw new Error(data.error || 'Verification failed');
+    throw new Error(data.message || data.error || 'Verification failed');
+  }
+
+  // Store tokens if provided
+  if (data.accessToken && data.refreshToken) {
+    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   }
 
   return data;
@@ -246,7 +268,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   return data;
 }
 
-export async function resetPassword(token: string, password: string): Promise<{ success: boolean; message: string }> {
+export async function resetPassword(token: string, password: string): Promise<{ success: boolean; message: string; user?: User; accessToken?: string; refreshToken?: string }> {
   const response = await fetch(`${AUTH_BASE_URL}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -256,7 +278,12 @@ export async function resetPassword(token: string, password: string): Promise<{ 
   const data = await response.json();
   
   if (!response.ok) {
-    throw new Error(data.error || 'Password reset failed');
+    throw new Error(data.message || data.error || 'Password reset failed');
+  }
+
+  // Store tokens if provided
+  if (data.accessToken && data.refreshToken) {
+    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   }
 
   return data;

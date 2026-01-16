@@ -58,7 +58,13 @@ export interface BassPurrParams {
   output: number;      // 0 to 1 - output level
 }
 
-export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams;
+export interface TremoloParams {
+  rate: number;        // 0.5 to 15 Hz - LFO rate
+  depth: number;       // 0 to 1 - modulation depth
+  waveform: number;    // 0=sine, 1=triangle
+}
+
+export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams;
 
 let workletLoaded = false;
 const workletLoadingMap = new WeakMap<AudioWorklet, Promise<void>>();
@@ -484,9 +490,51 @@ export class BassPurrEffect extends WorkletEffect {
 }
 
 /**
+ * Tremolo Effect
+ * LFO-modulated amplitude - ported from AudioNoise tremolo.h
+ * Processes input audio by modulating its amplitude using an LFO
+ */
+export class TremoloEffect extends WorkletEffect {
+  private _params: TremoloParams = {
+    rate: 5,
+    depth: 0.5,
+    waveform: 0,
+  };
+
+  constructor(context: AudioContext) {
+    super(context, 'tremolo-processor');
+  }
+
+  get params(): TremoloParams {
+    return { ...this._params };
+  }
+
+  setRate(rate: number): void {
+    this._params.rate = Math.max(0.5, Math.min(15, rate));
+    this.setParam('rate', this._params.rate);
+  }
+
+  setDepth(depth: number): void {
+    this._params.depth = Math.max(0, Math.min(1, depth));
+    this.setParam('depth', this._params.depth);
+  }
+
+  setWaveform(waveform: number): void {
+    this._params.waveform = Math.round(Math.max(0, Math.min(1, waveform)));
+    this.setParam('waveform', this._params.waveform);
+  }
+
+  setAllParams(params: Partial<TremoloParams>): void {
+    if (params.rate !== undefined) this.setRate(params.rate);
+    if (params.depth !== undefined) this.setDepth(params.depth);
+    if (params.waveform !== undefined) this.setWaveform(params.waveform);
+  }
+}
+
+/**
  * Effect type enum for the factory
  */
-export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr';
+export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo';
 
 /**
  * Default parameters for each effect type
@@ -537,6 +585,12 @@ export const defaultWorkletParams: Record<WorkletEffectType, Record<string, numb
     output: 0.7,
     mix: 1,
   },
+  tremolo: {
+    rate: 5,
+    depth: 0.5,
+    waveform: 0,
+    mix: 1,
+  },
 };
 
 /**
@@ -559,6 +613,8 @@ export function createWorkletEffect(
       return new CompressorEffect(context);
     case 'basspurr':
       return new BassPurrEffect(context);
+    case 'tremolo':
+      return new TremoloEffect(context);
     default:
       throw new Error(`Unknown effect type: ${type}`);
   }
