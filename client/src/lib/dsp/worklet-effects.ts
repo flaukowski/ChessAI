@@ -26,7 +26,7 @@ export interface EQParams {
 export interface DistortionParams {
   drive: number;      // 0 to 1
   tone: number;       // 0 to 1
-  mode: number;       // 0=soft, 1=hard, 2=tube
+  mode: number;       // 0=soft, 1=hard, 2=tube, 3=quadratic
   level: number;      // 0 to 1
 }
 
@@ -242,7 +242,7 @@ export class DistortionEffect extends WorkletEffect {
   }
 
   setMode(mode: number): void {
-    this._params.mode = Math.round(Math.max(0, Math.min(2, mode)));
+    this._params.mode = Math.round(Math.max(0, Math.min(3, mode)));
     this.setParam('mode', this._params.mode);
   }
 

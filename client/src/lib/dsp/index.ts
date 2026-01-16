@@ -11,6 +11,8 @@
  * - Preset save/load/share system
  * - Offline WAV export
  * - Legacy effects (Echo, Flanger, Phaser, Biquad filters)
+ * - Window functions for spectral analysis (Hann, Hamming, Blackman, etc.)
+ * - Remez FIR filter design for linear-phase filtering
  */
 
 // Legacy audio engine (for backward compatibility)
@@ -25,3 +27,7 @@ export * from './bluetooth-audio-manager';
 export * from './worklet-effects';
 export * from './pedalboard-engine';
 export * from './wav-export';
+
+// DSP utilities adapted from dspml/dspc
+export * from './window-functions';
+export * from './remez-fir';

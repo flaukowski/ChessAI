@@ -12,6 +12,7 @@ const TWO_PI = 2 * Math.PI;
 /**
  * 3-Band Parametric EQ Processor
  * Low, Mid, High bands with gain and frequency control
+ * Uses frequency pre-warping for accurate cutoffs at high frequencies
  */
 class EQProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
@@ -26,6 +27,20 @@ class EQProcessor extends AudioWorkletProcessor {
       { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
       { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
     ];
+  }
+
+  // Pre-warp frequency for accurate digital filter response
+  // Based on bilinear transform from dspml
+  prewarpFrequency(fc) {
+    // For frequencies below Nyquist/4, warping is minimal
+    // Above that, apply tangent pre-warping for accuracy
+    const nyquist = sampleRate / 2;
+    if (fc < nyquist * 0.25) {
+      return fc;
+    }
+    // Clamp to just below Nyquist to avoid tan(π/2) = infinity
+    const clampedFc = Math.min(fc, nyquist * 0.98);
+    return (sampleRate / Math.PI) * Math.tan(Math.PI * clampedFc / sampleRate);
   }
 
   constructor() {
@@ -47,10 +62,11 @@ class EQProcessor extends AudioWorkletProcessor {
     this.lastHighGain = 0;
   }
 
-  // Low shelf filter coefficient calculation
+  // Low shelf filter coefficient calculation (with pre-warping)
   calcLowShelf(freq, gainDb) {
     const A = Math.pow(10, gainDb / 40);
-    const w0 = TWO_PI * freq / sampleRate;
+    const warpedFreq = this.prewarpFrequency(freq);
+    const w0 = TWO_PI * warpedFreq / sampleRate;
     const cos_w0 = Math.cos(w0);
     const sin_w0 = Math.sin(w0);
     const alpha = sin_w0 / 2 * Math.sqrt((A + 1/A) * (1/0.9 - 1) + 2);
@@ -64,10 +80,11 @@ class EQProcessor extends AudioWorkletProcessor {
     this.lowCoeffs.a2 = ((A + 1) + (A - 1) * cos_w0 - 2 * sqrtA * alpha) / a0;
   }
 
-  // Peaking EQ coefficient calculation
+  // Peaking EQ coefficient calculation (with pre-warping)
   calcPeaking(freq, gainDb, Q) {
     const A = Math.pow(10, gainDb / 40);
-    const w0 = TWO_PI * freq / sampleRate;
+    const warpedFreq = this.prewarpFrequency(freq);
+    const w0 = TWO_PI * warpedFreq / sampleRate;
     const cos_w0 = Math.cos(w0);
     const sin_w0 = Math.sin(w0);
     const alpha = sin_w0 / (2 * Q);
@@ -80,10 +97,11 @@ class EQProcessor extends AudioWorkletProcessor {
     this.midCoeffs.a2 = (1 - alpha / A) / a0;
   }
 
-  // High shelf filter coefficient calculation
+  // High shelf filter coefficient calculation (with pre-warping)
   calcHighShelf(freq, gainDb) {
     const A = Math.pow(10, gainDb / 40);
-    const w0 = TWO_PI * freq / sampleRate;
+    const warpedFreq = this.prewarpFrequency(freq);
+    const w0 = TWO_PI * warpedFreq / sampleRate;
     const cos_w0 = Math.cos(w0);
     const sin_w0 = Math.sin(w0);
     const alpha = sin_w0 / 2 * Math.sqrt((A + 1/A) * (1/0.9 - 1) + 2);
@@ -179,7 +197,7 @@ class DistortionProcessor extends AudioWorkletProcessor {
     return [
       { name: 'drive', defaultValue: 0.5, minValue: 0, maxValue: 1 },
       { name: 'tone', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-      { name: 'mode', defaultValue: 0, minValue: 0, maxValue: 2 }, // 0=soft, 1=hard, 2=tube
+      { name: 'mode', defaultValue: 0, minValue: 0, maxValue: 3 }, // 0=soft, 1=hard, 2=tube, 3=quadratic
       { name: 'level', defaultValue: 0.5, minValue: 0, maxValue: 1 },
       { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
       { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
@@ -216,6 +234,27 @@ class DistortionProcessor extends AudioWorkletProcessor {
     } else {
       return -1 + Math.exp(x * k * 0.8);
     }
+  }
+
+  // Quadratic soft-clip - smoother transition, fewer harsh high harmonics
+  // Based on second-order curves from dspml
+  quadraticClip(x, drive) {
+    const k = drive * 4 + 1;
+    const scaled = x * k;
+
+    if (scaled > 1.0) return 1.0;
+    if (scaled < -1.0) return -1.0;
+
+    // Quadratic regions near saturation, linear in center
+    if (scaled > 0.5) {
+      return 1.0 - 2.0 * (1.0 - scaled) * (1.0 - scaled);
+    }
+    if (scaled < -0.5) {
+      return -1.0 + 2.0 * (1.0 + scaled) * (1.0 + scaled);
+    }
+
+    // Linear region in the middle for clean low-level signals
+    return scaled * 2.0 / k;
   }
 
   process(inputs, outputs, parameters) {
@@ -261,6 +300,9 @@ class DistortionProcessor extends AudioWorkletProcessor {
               break;
             case 2:
               distorted = this.tubeSaturate(dry, drive);
+              break;
+            case 3:
+              distorted = this.quadraticClip(dry, drive);
               break;
             default:
               distorted = this.softClip(dry, drive);
