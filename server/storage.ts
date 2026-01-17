@@ -6,6 +6,8 @@ import {
   refreshTokens,
   zkpChallenges,
   loginAttempts,
+  auditLogs,
+  userPresets,
   type User,
   type InsertUser,
   type UserAISettings,
@@ -16,6 +18,10 @@ import {
   type RefreshToken,
   type ZKPChallenge,
   type LoginAttempt,
+  type AuditLog,
+  type UserPreset,
+  type InsertPreset,
+  type UpdatePreset,
 } from "@shared/schema";
 import { db } from "./db";
 import { nanoid } from "nanoid";
@@ -62,6 +68,34 @@ export interface IStorage {
   resetFailedAttempts(userId: string): Promise<void>;
   lockAccount(userId: string, until: Date): Promise<void>;
   isAccountLocked(userId: string): Promise<boolean>;
+
+  // Audit logging
+  createAuditLog(params: {
+    userId?: string;
+    action: string;
+    resource?: string;
+    resourceId?: string;
+    changes?: Record<string, any>;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: Record<string, any>;
+  }): Promise<AuditLog>;
+  getAuditLogs(filters?: {
+    userId?: string;
+    action?: string;
+    resource?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]>;
+
+  // User presets
+  createPreset(userId: string, preset: InsertPreset): Promise<UserPreset>;
+  getPreset(id: string): Promise<UserPreset | undefined>;
+  getUserPresets(userId: string): Promise<UserPreset[]>;
+  updatePreset(id: string, userId: string, updates: UpdatePreset): Promise<UserPreset | undefined>;
+  deletePreset(id: string, userId: string): Promise<boolean>;
+  getPublicPresets(limit?: number, offset?: number): Promise<UserPreset[]>;
+  getPresetByShareToken(shareToken: string): Promise<UserPreset | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -277,6 +311,117 @@ export class DatabaseStorage implements IStorage {
     if (!user || !user.lockedUntil) return false;
     return user.lockedUntil > new Date();
   }
+
+  // Audit logging
+  async createAuditLog(params: {
+    userId?: string;
+    action: string;
+    resource?: string;
+    resourceId?: string;
+    changes?: Record<string, any>;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: Record<string, any>;
+  }): Promise<AuditLog> {
+    const [log] = await db
+      .insert(auditLogs)
+      .values({
+        userId: params.userId || null,
+        action: params.action,
+        resource: params.resource || null,
+        resourceId: params.resourceId || null,
+        changes: params.changes || null,
+        ipAddress: params.ipAddress || null,
+        userAgent: params.userAgent || null,
+        metadata: params.metadata || null,
+      })
+      .returning();
+    return log;
+  }
+
+  async getAuditLogs(filters?: {
+    userId?: string;
+    action?: string;
+    resource?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(auditLogs.userId, filters.userId));
+    if (filters?.action) conditions.push(eq(auditLogs.action, filters.action));
+    if (filters?.resource) conditions.push(eq(auditLogs.resource, filters.resource));
+
+    let query = db.select().from(auditLogs);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const limit = filters?.limit || 100;
+    const offset = filters?.offset || 0;
+
+    const logs = await query.limit(limit).offset(offset);
+    return logs;
+  }
+
+  // User presets
+  async createPreset(userId: string, preset: InsertPreset): Promise<UserPreset> {
+    const shareToken = nanoid(16);
+    const [newPreset] = await db
+      .insert(userPresets)
+      .values({
+        userId,
+        name: preset.name,
+        description: preset.description || null,
+        effectChain: preset.effectChain,
+        tags: preset.tags || null,
+        isPublic: preset.isPublic || false,
+        shareToken,
+      })
+      .returning();
+    return newPreset;
+  }
+
+  async getPreset(id: string): Promise<UserPreset | undefined> {
+    const [preset] = await db.select().from(userPresets).where(eq(userPresets.id, id));
+    return preset || undefined;
+  }
+
+  async getUserPresets(userId: string): Promise<UserPreset[]> {
+    return db.select().from(userPresets).where(eq(userPresets.userId, userId));
+  }
+
+  async updatePreset(id: string, userId: string, updates: UpdatePreset): Promise<UserPreset | undefined> {
+    const [updated] = await db
+      .update(userPresets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(userPresets.id, id), eq(userPresets.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePreset(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(userPresets)
+      .where(and(eq(userPresets.id, id), eq(userPresets.userId, userId)));
+    return true;
+  }
+
+  async getPublicPresets(limit: number = 50, offset: number = 0): Promise<UserPreset[]> {
+    return db
+      .select()
+      .from(userPresets)
+      .where(eq(userPresets.isPublic, true))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getPresetByShareToken(shareToken: string): Promise<UserPreset | undefined> {
+    const [preset] = await db
+      .select()
+      .from(userPresets)
+      .where(eq(userPresets.shareToken, shareToken));
+    return preset || undefined;
+  }
 }
 
 class InMemoryStorage implements IStorage {
@@ -287,6 +432,8 @@ class InMemoryStorage implements IStorage {
   private refreshTokens: RefreshToken[] = [];
   private zkpChallenges: ZKPChallenge[] = [];
   private loginAttempts: LoginAttempt[] = [];
+  private auditLogs: AuditLog[] = [];
+  private presets: UserPreset[] = [];
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.find(u => u.id === id);
@@ -452,6 +599,97 @@ class InMemoryStorage implements IStorage {
     const user = await this.getUser(userId);
     if (!user || !user.lockedUntil) return false;
     return user.lockedUntil > new Date();
+  }
+
+  // Audit logging
+  async createAuditLog(params: {
+    userId?: string;
+    action: string;
+    resource?: string;
+    resourceId?: string;
+    changes?: Record<string, any>;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: Record<string, any>;
+  }): Promise<AuditLog> {
+    const log: AuditLog = {
+      id: nanoid(),
+      userId: params.userId || null,
+      action: params.action,
+      resource: params.resource || null,
+      resourceId: params.resourceId || null,
+      changes: params.changes || null,
+      ipAddress: params.ipAddress || null,
+      userAgent: params.userAgent || null,
+      metadata: params.metadata || null,
+      createdAt: new Date(),
+    };
+    this.auditLogs.push(log);
+    return log;
+  }
+
+  async getAuditLogs(filters?: {
+    userId?: string;
+    action?: string;
+    resource?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]> {
+    let logs = [...this.auditLogs];
+    if (filters?.userId) logs = logs.filter(l => l.userId === filters.userId);
+    if (filters?.action) logs = logs.filter(l => l.action === filters.action);
+    if (filters?.resource) logs = logs.filter(l => l.resource === filters.resource);
+    const offset = filters?.offset || 0;
+    const limit = filters?.limit || 100;
+    return logs.slice(offset, offset + limit);
+  }
+
+  // User presets
+  async createPreset(userId: string, preset: InsertPreset): Promise<UserPreset> {
+    const p: UserPreset = {
+      id: nanoid(),
+      userId,
+      name: preset.name,
+      description: preset.description || null,
+      effectChain: preset.effectChain,
+      tags: preset.tags || null,
+      isPublic: preset.isPublic || false,
+      shareToken: nanoid(16),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.presets.push(p);
+    return p;
+  }
+
+  async getPreset(id: string): Promise<UserPreset | undefined> {
+    return this.presets.find(p => p.id === id);
+  }
+
+  async getUserPresets(userId: string): Promise<UserPreset[]> {
+    return this.presets.filter(p => p.userId === userId);
+  }
+
+  async updatePreset(id: string, userId: string, updates: UpdatePreset): Promise<UserPreset | undefined> {
+    const idx = this.presets.findIndex(p => p.id === id && p.userId === userId);
+    if (idx === -1) return undefined;
+    this.presets[idx] = { ...this.presets[idx], ...updates, updatedAt: new Date() };
+    return this.presets[idx];
+  }
+
+  async deletePreset(id: string, userId: string): Promise<boolean> {
+    const idx = this.presets.findIndex(p => p.id === id && p.userId === userId);
+    if (idx === -1) return false;
+    this.presets.splice(idx, 1);
+    return true;
+  }
+
+  async getPublicPresets(limit: number = 50, offset: number = 0): Promise<UserPreset[]> {
+    return this.presets.filter(p => p.isPublic).slice(offset, offset + limit);
+  }
+
+  async getPresetByShareToken(shareToken: string): Promise<UserPreset | undefined> {
+    return this.presets.find(p => p.shareToken === shareToken);
   }
 }
 

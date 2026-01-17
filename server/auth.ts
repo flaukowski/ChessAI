@@ -12,6 +12,15 @@ import {
   type ZKPCommitment,
   type ZKPProof,
 } from '@shared/zkp-crypto';
+import {
+  validateEmail,
+  validatePassword,
+  sanitizeString,
+  normalizeEmail,
+  registrationSchema,
+  loginSchema,
+  challengeSchema,
+} from './validation';
 
 const router = Router();
 
@@ -32,6 +41,11 @@ const RATE_LIMIT_MAX_REQUESTS = securityConfig.rateLimitMaxRequests;
 // In-memory stores
 const accessTokenStore = new Map<string, { userId: string; expiresAt: Date }>();
 const rateLimitStore = new Map<string, { count: number; resetAt: Date }>();
+const emailRateLimitStore = new Map<string, { count: number; resetAt: Date }>();
+
+// Per-email rate limiting configuration
+const EMAIL_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_RATE_LIMIT_MAX_ATTEMPTS = 5; // Max registration/reset attempts per email per hour
 
 // Helper functions
 const hashPassword = async (password: string): Promise<string> => {
@@ -72,6 +86,65 @@ const getClientIP = (req: Request): string => {
   return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
     req.socket.remoteAddress ||
     'unknown';
+};
+
+// Check per-email rate limit
+const checkEmailRateLimit = (email: string): { allowed: boolean; retryAfter?: number } => {
+  const normalizedEmail = normalizeEmail(email);
+  const now = new Date();
+  const limit = emailRateLimitStore.get(normalizedEmail);
+
+  if (!limit) {
+    emailRateLimitStore.set(normalizedEmail, {
+      count: 1,
+      resetAt: new Date(now.getTime() + EMAIL_RATE_LIMIT_WINDOW_MS),
+    });
+    return { allowed: true };
+  }
+
+  if (limit.resetAt < now) {
+    emailRateLimitStore.set(normalizedEmail, {
+      count: 1,
+      resetAt: new Date(now.getTime() + EMAIL_RATE_LIMIT_WINDOW_MS),
+    });
+    return { allowed: true };
+  }
+
+  if (limit.count >= EMAIL_RATE_LIMIT_MAX_ATTEMPTS) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((limit.resetAt.getTime() - now.getTime()) / 1000),
+    };
+  }
+
+  limit.count++;
+  return { allowed: true };
+};
+
+// Log audit event helper
+const logAuditEvent = async (
+  action: string,
+  req: Request,
+  userId?: string,
+  resource?: string,
+  resourceId?: string,
+  changes?: Record<string, any>,
+  metadata?: Record<string, any>
+) => {
+  try {
+    await storage.createAuditLog({
+      userId,
+      action,
+      resource,
+      resourceId,
+      changes,
+      ipAddress: getClientIP(req),
+      userAgent: req.headers['user-agent'],
+      metadata,
+    });
+  } catch (error) {
+    console.error('[Audit] Failed to log event:', error);
+  }
 };
 
 // Rate limiting middleware
@@ -136,6 +209,12 @@ setInterval(() => {
       rateLimitStore.delete(key);
     }
   }
+  // Clean up email rate limit entries
+  for (const [email, data] of emailRateLimitStore.entries()) {
+    if (data.resetAt < now) {
+      emailRateLimitStore.delete(email);
+    }
+  }
   // Clean up expired ZKP challenges
   storage.deleteExpiredZKPChallenges().catch(console.error);
 }, 60000);
@@ -150,6 +229,26 @@ router.post('/register', async (req: Request, res: Response) => {
   try {
     const { email, password, zkpCommitment, firstName, lastName } = req.body;
 
+    // Validate email format
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({
+        error: 'Invalid email',
+        message: emailValidation.error,
+      });
+    }
+
+    // Check per-email rate limit
+    const emailRateLimit = checkEmailRateLimit(email);
+    if (!emailRateLimit.allowed) {
+      await logAuditEvent('auth.register.rate_limited', req, undefined, 'user', undefined, undefined, { email: normalizeEmail(email) });
+      return res.status(429).json({
+        error: 'Too many attempts',
+        message: 'Too many registration attempts for this email. Please try again later.',
+        retryAfter: emailRateLimit.retryAfter,
+      });
+    }
+
     if (!email || (!password && !zkpCommitment)) {
       return res.status(400).json({
         error: 'Missing fields',
@@ -157,23 +256,31 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // Validate password if provided (for backward compatibility or if client generates commitment server-side)
-    if (password && password.length < 8) {
-      return res.status(400).json({
-        error: 'Password too short',
-        message: 'Password must be at least 8 characters',
-      });
+    // Validate password if provided
+    if (password) {
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({
+          error: 'Invalid password',
+          message: passwordValidation.error,
+        });
+      }
     }
 
-    const existingUser = await storage.getUserByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = await storage.getUserByEmail(normalizedEmail);
     if (existingUser) {
+      // Don't reveal that email exists - use same rate limit response
+      await logAuditEvent('auth.register.email_exists', req, undefined, 'user', undefined, undefined, { email: normalizedEmail });
       return res.status(409).json({
         error: 'Email exists',
         message: 'An account with this email already exists',
       });
     }
 
-    const username = email.split('@')[0] + '_' + Date.now();
+    const sanitizedFirstName = sanitizeString(firstName || '');
+    const sanitizedLastName = sanitizeString(lastName || '');
+    const username = normalizedEmail.split('@')[0] + '_' + Date.now();
 
     // Handle ZKP commitment or generate from password
     let commitment: ZKPCommitment;
@@ -192,9 +299,9 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const user = await storage.createUser({
       username,
-      email,
-      firstName: firstName || '',
-      lastName: lastName || '',
+      email: normalizedEmail,
+      firstName: sanitizedFirstName,
+      lastName: sanitizedLastName,
       password: passwordHash,
     });
 
@@ -211,8 +318,8 @@ router.post('/register', async (req: Request, res: Response) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationToken, firstName);
-      console.log(`[Auth] Verification email sent to ${email}`);
+      await sendVerificationEmail(normalizedEmail, verificationToken, sanitizedFirstName);
+      console.log(`[Auth] Verification email sent to ${normalizedEmail}`);
     } catch (emailError) {
       console.error('[Auth] Failed to send verification email:', emailError);
     }
@@ -220,7 +327,8 @@ router.post('/register', async (req: Request, res: Response) => {
     const tokens = await createTokenPair(user.id);
 
     // Log successful registration
-    await storage.recordLoginAttempt(email, true, getClientIP(req), req.headers['user-agent']);
+    await storage.recordLoginAttempt(normalizedEmail, true, getClientIP(req), req.headers['user-agent']);
+    await logAuditEvent('auth.register.success', req, user.id, 'user', user.id, undefined, { email: normalizedEmail });
 
     res.status(201).json({
       user: sanitizeUser({ ...user, zkpPublicKey: commitment.publicKey, zkpSalt: commitment.salt }),

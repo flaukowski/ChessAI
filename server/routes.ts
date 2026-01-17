@@ -3,10 +3,14 @@ import { createServer, type Server } from "http";
 import { pool } from "./db";
 import { metrics } from "./metrics";
 import authRoutes from "./auth";
+import presetsRoutes from "./presets";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes (Space Child Auth integration)
   app.use("/api/space-child-auth", authRoutes);
+
+  // API v1 routes
+  app.use("/api/v1/presets", presetsRoutes);
   
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });

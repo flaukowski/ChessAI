@@ -64,7 +64,15 @@ export interface TremoloParams {
   waveform: number;    // 0=sine, 1=triangle
 }
 
-export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams;
+export interface ReverbParams {
+  roomSize: number;    // 0 to 1 - reverb tail length
+  damping: number;     // 0 to 1 - high frequency absorption
+  preDelay: number;    // 0 to 100 ms - initial reflection delay
+  decay: number;       // 0.1 to 10 s - decay time
+  width: number;       // 0 to 1 - stereo spread
+}
+
+export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams | ReverbParams;
 
 let workletLoaded = false;
 const workletLoadingMap = new WeakMap<AudioWorklet, Promise<void>>();
@@ -532,9 +540,65 @@ export class TremoloEffect extends WorkletEffect {
 }
 
 /**
+ * Reverb Effect
+ * Algorithmic reverb using Freeverb-style comb and allpass filters
+ * Provides room simulation with adjustable parameters
+ */
+export class ReverbEffect extends WorkletEffect {
+  private _params: ReverbParams = {
+    roomSize: 0.5,
+    damping: 0.5,
+    preDelay: 10,
+    decay: 1.5,
+    width: 0.8,
+  };
+
+  constructor(context: AudioContext) {
+    super(context, 'reverb-processor');
+  }
+
+  get params(): ReverbParams {
+    return { ...this._params };
+  }
+
+  setRoomSize(value: number): void {
+    this._params.roomSize = Math.max(0, Math.min(1, value));
+    this.setParam('roomSize', this._params.roomSize);
+  }
+
+  setDamping(value: number): void {
+    this._params.damping = Math.max(0, Math.min(1, value));
+    this.setParam('damping', this._params.damping);
+  }
+
+  setPreDelay(value: number): void {
+    this._params.preDelay = Math.max(0, Math.min(100, value));
+    this.setParam('preDelay', this._params.preDelay);
+  }
+
+  setDecay(value: number): void {
+    this._params.decay = Math.max(0.1, Math.min(10, value));
+    this.setParam('decay', this._params.decay);
+  }
+
+  setWidth(value: number): void {
+    this._params.width = Math.max(0, Math.min(1, value));
+    this.setParam('width', this._params.width);
+  }
+
+  setAllParams(params: Partial<ReverbParams>): void {
+    if (params.roomSize !== undefined) this.setRoomSize(params.roomSize);
+    if (params.damping !== undefined) this.setDamping(params.damping);
+    if (params.preDelay !== undefined) this.setPreDelay(params.preDelay);
+    if (params.decay !== undefined) this.setDecay(params.decay);
+    if (params.width !== undefined) this.setWidth(params.width);
+  }
+}
+
+/**
  * Effect type enum for the factory
  */
-export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo';
+export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo' | 'reverb';
 
 /**
  * Default parameters for each effect type
@@ -591,6 +655,14 @@ export const defaultWorkletParams: Record<WorkletEffectType, Record<string, numb
     waveform: 0,
     mix: 1,
   },
+  reverb: {
+    roomSize: 0.5,
+    damping: 0.5,
+    preDelay: 10,
+    decay: 1.5,
+    width: 0.8,
+    mix: 0.3,
+  },
 };
 
 /**
@@ -615,6 +687,8 @@ export function createWorkletEffect(
       return new BassPurrEffect(context);
     case 'tremolo':
       return new TremoloEffect(context);
+    case 'reverb':
+      return new ReverbEffect(context);
     default:
       throw new Error(`Unknown effect type: ${type}`);
   }
