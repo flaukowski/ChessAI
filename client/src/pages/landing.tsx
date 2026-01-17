@@ -82,25 +82,35 @@ export default function Landing() {
         onSuccess={() => navigate('/studio')}
       />
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center">
+      <section className="relative min-h-screen flex flex-col items-center justify-center">
         <AudioWaveScene />
         
-        <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
+        {/* Top content - above the sphere */}
+        <div className="relative z-10 text-center mb-auto pt-24">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: -30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-4">
               <Sparkles className="w-4 h-4 text-cyan-400" />
               <span className="text-sm text-gray-300">Powered by AudioNoise DSP</span>
             </div>
             
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
+            <h1 className="text-5xl md:text-7xl font-bold text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
               AudioNoise Web
             </h1>
-            
-            <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto mb-10">Real-time audio processing in your browser</p>
+          </motion.div>
+        </div>
+        
+        {/* Bottom content - below the sphere */}
+        <div className="relative z-10 text-center mt-auto pb-24">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto mb-8">Real-time audio processing in your browser</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {!isAuthenticated ? (

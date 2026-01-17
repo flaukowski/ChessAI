@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import { storage } from './storage';
+import { tokenConfig, securityConfig } from './config';
 import type { User } from '@shared/schema';
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import {
@@ -14,19 +15,19 @@ import {
 
 const router = Router();
 
-// Token configuration
-const ACCESS_TOKEN_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
-const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const EMAIL_VERIFICATION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-const PASSWORD_RESET_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour
-const ZKP_CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for ZKP challenge
-const SALT_ROUNDS = 10;
+// Token configuration (from centralized config)
+const ACCESS_TOKEN_EXPIRY_MS = tokenConfig.accessTokenExpiryMs;
+const REFRESH_TOKEN_EXPIRY_MS = tokenConfig.refreshTokenExpiryMs;
+const EMAIL_VERIFICATION_EXPIRY_MS = tokenConfig.emailVerificationExpiryMs;
+const PASSWORD_RESET_EXPIRY_MS = tokenConfig.passwordResetExpiryMs;
+const ZKP_CHALLENGE_EXPIRY_MS = tokenConfig.zkpChallengeExpiryMs;
+const SALT_ROUNDS = securityConfig.saltRounds;
 
-// Security configuration
-const MAX_LOGIN_ATTEMPTS = 5; // Lock after 5 failed attempts
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minute lockout
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
-const RATE_LIMIT_MAX_REQUESTS = 10; // Max 10 requests per minute
+// Security configuration (from centralized config)
+const MAX_LOGIN_ATTEMPTS = securityConfig.maxLoginAttempts;
+const LOCKOUT_DURATION_MS = securityConfig.lockoutDurationMs;
+const RATE_LIMIT_WINDOW_MS = securityConfig.rateLimitWindowMs;
+const RATE_LIMIT_MAX_REQUESTS = securityConfig.rateLimitMaxRequests;
 
 // In-memory stores
 const accessTokenStore = new Map<string, { userId: string; expiresAt: Date }>();
@@ -837,19 +838,44 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
 export default router;
 
+/**
+ * Initialize default admin user from environment variables.
+ * SECURITY: Never hardcode credentials. Use environment variables only.
+ *
+ * Required environment variables:
+ * - DEFAULT_ADMIN_EMAIL: Admin user email
+ * - DEFAULT_ADMIN_PASSWORD: Admin user password (min 12 characters recommended)
+ * - DEFAULT_ADMIN_FIRST_NAME: Admin first name (optional)
+ * - DEFAULT_ADMIN_LAST_NAME: Admin last name (optional)
+ */
 export const initializeDefaultUser = async () => {
+  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
+  const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+
+  // Skip if no admin credentials configured
+  if (!adminEmail || !adminPassword) {
+    console.log('[Auth] No default admin configured. Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD to create one.');
+    return;
+  }
+
+  // Validate password strength
+  if (adminPassword.length < 8) {
+    console.error('[Auth] DEFAULT_ADMIN_PASSWORD must be at least 8 characters');
+    return;
+  }
+
   try {
-    const existingUser = await storage.getUserByEmail('info@spacechild.love');
+    const existingUser = await storage.getUserByEmail(adminEmail);
     if (!existingUser) {
-      // Generate ZKP commitment for default user
-      const commitment = await generateCommitment('password');
+      // Generate ZKP commitment for admin user
+      const commitment = await generateCommitment(adminPassword);
 
       const user = await storage.createUser({
-        username: 'spacechild',
-        email: 'info@spacechild.love',
-        firstName: 'Space',
-        lastName: 'Child',
-        password: await hashPassword('password'),
+        username: adminEmail.split('@')[0] + '_admin',
+        email: adminEmail,
+        firstName: process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin',
+        lastName: process.env.DEFAULT_ADMIN_LAST_NAME || 'User',
+        password: await hashPassword(adminPassword),
       });
 
       await storage.updateUser(user.id, {
@@ -858,9 +884,9 @@ export const initializeDefaultUser = async () => {
         zkpSalt: commitment.salt,
       });
 
-      console.log('Default Space Child user created with ZKP credentials');
+      console.log(`[Auth] Default admin user created: ${adminEmail}`);
     }
   } catch (error) {
-    console.error('Failed to initialize default user:', error);
+    console.error('[Auth] Failed to initialize default user:', error);
   }
 };

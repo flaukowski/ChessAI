@@ -1,11 +1,73 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import helmet from "helmet";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nanoid } from "nanoid";
 import { initializeDefaultUser } from "./auth";
 
 const app = express();
+
+// =============================================================================
+// SECURITY MIDDLEWARE
+// =============================================================================
+
+// Helmet - Sets various HTTP headers for security
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:", "blob:"],
+      mediaSrc: ["'self'", "blob:"],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Required for AudioWorklet with SharedArrayBuffer
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  noSniff: true,
+  xssFilter: true,
+}));
+
+// CORS - Configure allowed origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) || [];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // In development, allow localhost
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    // In production, check against allowed origins
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-CSRF-Token'],
+  exposedHeaders: ['X-Request-ID'],
+  maxAge: 86400, // 24 hours
+}));
 
 const getSessionSecret = () => {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -15,28 +77,42 @@ const getSessionSecret = () => {
   return nanoid(32); // Random secret for development only
 };
 
+// =============================================================================
+// SESSION CONFIGURATION
+// =============================================================================
 app.use(session({
   secret: getSessionSecret(),
   resave: false,
   saveUninitialized: false,
+  name: 'sessionId', // Don't use default 'connect.sid' - reveals tech stack
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: 'strict', // CSRF protection
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
   },
 }));
 
+// =============================================================================
+// REQUEST BODY PARSING WITH SIZE LIMITS
+// =============================================================================
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
   }
 }
+
+// Limit request body sizes to prevent DoS attacks
+const REQUEST_SIZE_LIMIT = '1mb';
+
 app.use(express.json({
+  limit: REQUEST_SIZE_LIMIT,
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: REQUEST_SIZE_LIMIT }));
 
 app.use((req, res, next) => {
   const start = Date.now();
