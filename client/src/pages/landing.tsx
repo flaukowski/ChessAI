@@ -105,7 +105,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   onClick={() => { setAuthMode('login'); setAuthOpen(true); }}
-                  className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 border-0"
+                  className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
                   Sign In
@@ -115,7 +115,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   onClick={() => navigate('/studio')}
-                  className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700 border-0"
+                  className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
                 >
                   <Waves className="w-5 h-5 mr-2" />
                   Open Studio
@@ -223,7 +223,7 @@ export default function Landing() {
               <Button 
                 size="lg"
                 onClick={() => { setAuthMode('login'); setAuthOpen(true); }}
-                className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700"
+                className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
                 Sign In to Start
@@ -233,7 +233,7 @@ export default function Landing() {
               <Button 
                 size="lg"
                 onClick={() => navigate('/studio')}
-                className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-700 hover:to-purple-700"
+                className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
                 Open Studio
