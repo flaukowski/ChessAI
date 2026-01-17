@@ -56,22 +56,8 @@ export function useSpaceChildAuth(): UseSpaceChildAuthReturn {
     } catch (e: any) {
       setError(e.message);
       setIsLoading(false);
-      if (e.requiresVerification) {
-        return { success: true, requiresVerification: true };
-      }
-      // Handle account lockout
-      if (e.statusCode === 423) {
-        return { success: false, error: e.message, accountLocked: true };
-      }
-      // Handle rate limiting
-      if (e.statusCode === 429) {
-        return { success: false, error: e.message, retryAfter: e.retryAfter };
-      }
-      return {
-        success: false,
-        error: e.message,
-        attemptsRemaining: e.attemptsRemaining,
-      };
+      // Re-throw so callers using try/catch can handle it
+      throw e;
     }
   }, []);
 
@@ -88,11 +74,8 @@ export function useSpaceChildAuth(): UseSpaceChildAuthReturn {
     } catch (e: any) {
       setError(e.message);
       setIsLoading(false);
-      // Handle rate limiting
-      if (e.statusCode === 429) {
-        return { success: false, error: e.message, retryAfter: e.retryAfter };
-      }
-      return { success: false, error: e.message };
+      // Re-throw so callers using try/catch can handle it
+      throw e;
     }
   }, []);
 
