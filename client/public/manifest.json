@@ -1,7 +1,7 @@
 {
-  "name": "SonicVision - AI Music Creation",
-  "short_name": "SonicVision",
-  "description": "Next-gen AI music creation platform with real-time DSP effects powered by AudioNoise",
+  "name": "AudioNoise Web - AI Music Creation",
+  "short_name": "AudioNoise",
+  "description": "Next-gen AI music creation platform with real-time DSP effects and professional audio processing",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0118",
@@ -10,13 +10,13 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/favicon.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/favicon.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
