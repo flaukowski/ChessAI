@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Eye, EyeOff, Mail, CheckCircle } from "lucide-react";
+import { Loader2, Eye, EyeOff, Mail, CheckCircle, Sparkles } from "lucide-react";
 import { forgotPassword, resendVerification } from "@/lib/space-child-auth";
 import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_1768261396578.png";
 
@@ -204,10 +204,10 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             <img src={alienOctopusLogo} alt="" className="w-6 h-6 object-contain" />
-            SonicVision Auth
+            Space Child Auth
           </DialogTitle>
           <DialogDescription className="text-gray-400">
-            Sign in to save your creations and settings
+            Secure authentication powered by zero-knowledge proofs
           </DialogDescription>
         </DialogHeader>
 
@@ -234,8 +234,13 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
               </div>
               <button type="button" onClick={() => setView("forgot-password")} className="text-sm text-cyan-400 hover:text-cyan-300">Forgot password?</button>
               {displayError && <p className="text-red-400 text-sm">{displayError}</p>}
-              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-600 to-purple-600" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className="w-full text-lg py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white" 
+                disabled={isLoading}
+              >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                <Sparkles className="w-5 h-5 mr-2" />
                 Sign In
               </Button>
             </form>
@@ -267,8 +272,13 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
                 <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="bg-slate-800 border-white/10 text-white" required />
               </div>
               {displayError && <p className="text-red-400 text-sm">{displayError}</p>}
-              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-600 to-purple-600" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className="w-full text-lg py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white" 
+                disabled={isLoading}
+              >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                <Sparkles className="w-5 h-5 mr-2" />
                 Create Account
               </Button>
             </form>
@@ -276,7 +286,10 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
         </Tabs>
 
         <p className="text-xs text-gray-500 text-center pt-4 border-t border-white/10">
-          <span className="text-cyan-400">Powered by Space Child Auth</span>
+          By signing up, you agree to our Terms of Service and Privacy Policy.
+        </p>
+        <p className="text-xs text-cyan-400 text-center mt-2">
+          Powered by Space Child Auth with ZKP
         </p>
       </DialogContent>
     </Dialog>
