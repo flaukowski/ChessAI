@@ -73,14 +73,12 @@ export default function Landing() {
       <PWAInstallPrompt appName="AudioNoise" />
       <OfflineIndicator />
       <UpdateBanner />
-      
       {/* Auth Modal */}
       <SpaceChildAuthModal 
         open={authOpen} 
         onOpenChange={setAuthOpen} 
         onSuccess={() => navigate('/studio')}
       />
-
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center">
         <AudioWaveScene />
@@ -100,10 +98,7 @@ export default function Landing() {
               AudioNoise Web
             </h1>
             
-            <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto mb-10">
-              Real-time audio processing in your browser. Biquad filters, echo, flanger, 
-              phaser — all with sub-millisecond latency.
-            </p>
+            <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto mb-10">Real-time audio processing in your browser</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {!isAuthenticated ? (
@@ -148,7 +143,6 @@ export default function Landing() {
           </div>
         </motion.div>
       </section>
-
       {/* Features Section */}
       <section className="py-24 px-6 bg-gradient-to-b from-[#0a0118] to-[#1a0a2e]">
         <div className="max-w-6xl mx-auto">
@@ -187,7 +181,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
       {/* Testimonial / Social Proof */}
       <section className="py-24 px-6 bg-gradient-to-b from-[#1a0a2e] to-[#0a0118]">
         <div className="max-w-4xl mx-auto text-center">
@@ -212,7 +205,6 @@ export default function Landing() {
           </motion.div>
         </div>
       </section>
-
       {/* CTA Section */}
       <section className="py-24 px-6 bg-[#0a0118]">
         <div className="max-w-4xl mx-auto text-center">
@@ -251,7 +243,6 @@ export default function Landing() {
           </motion.div>
         </div>
       </section>
-
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-white/10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
