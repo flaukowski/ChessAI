@@ -10,6 +10,12 @@ export const users = pgTable("users", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   password: text("password").notNull(),
+  // ZKP commitment fields
+  zkpPublicKey: text("zkp_public_key"), // Public key commitment for ZKP auth
+  zkpSalt: text("zkp_salt"), // Salt used for key derivation
+  // Account lockout fields
+  failedLoginAttempts: text("failed_login_attempts").notNull().default("0"),
+  lockedUntil: timestamp("locked_until"),
   emailVerified: boolean("email_verified").notNull().default(false),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
@@ -39,6 +45,27 @@ export const refreshTokens = pgTable("refresh_tokens", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ZKP authentication challenges (temporary, for login flow)
+export const zkpChallenges = pgTable("zkp_challenges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  sessionId: text("session_id").notNull().unique(),
+  challenge: text("challenge").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Login attempt logs for security auditing
+export const loginAttempts = pgTable("login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  success: boolean("success").notNull(),
+  failureReason: text("failure_reason"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -81,3 +108,5 @@ export type UpdateAISettings = z.infer<typeof updateAISettingsSchema>;
 export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type ZKPChallenge = typeof zkpChallenges.$inferSelect;
+export type LoginAttempt = typeof loginAttempts.$inferSelect;

@@ -7,13 +7,22 @@ import { useState, useEffect, useCallback } from 'react';
 import * as auth from '@/lib/space-child-auth';
 import type { User, LoginParams, RegisterParams } from '@/lib/space-child-auth';
 
+interface AuthResult {
+  success: boolean;
+  requiresVerification?: boolean;
+  error?: string;
+  attemptsRemaining?: number;
+  retryAfter?: number;
+  accountLocked?: boolean;
+}
+
 interface UseSpaceChildAuthReturn {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
-  login: (params: LoginParams) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
-  register: (params: RegisterParams) => Promise<{ success: boolean; requiresVerification?: boolean; error?: string }>;
+  login: (params: LoginParams) => Promise<AuthResult>;
+  register: (params: RegisterParams) => Promise<AuthResult>;
   logout: () => Promise<void>;
   verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
@@ -35,11 +44,12 @@ export function useSpaceChildAuth(): UseSpaceChildAuthReturn {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (params: LoginParams) => {
+  const login = useCallback(async (params: LoginParams): Promise<AuthResult> => {
     setError(null);
     setIsLoading(true);
     try {
-      const result = await auth.login(params);
+      // Use smartLogin which tries ZKP first, then falls back to legacy
+      const result = await auth.smartLogin(params);
       setUser(result.user);
       setIsLoading(false);
       return { success: true };
@@ -49,11 +59,23 @@ export function useSpaceChildAuth(): UseSpaceChildAuthReturn {
       if (e.requiresVerification) {
         return { success: true, requiresVerification: true };
       }
-      return { success: false, error: e.message };
+      // Handle account lockout
+      if (e.statusCode === 423) {
+        return { success: false, error: e.message, accountLocked: true };
+      }
+      // Handle rate limiting
+      if (e.statusCode === 429) {
+        return { success: false, error: e.message, retryAfter: e.retryAfter };
+      }
+      return {
+        success: false,
+        error: e.message,
+        attemptsRemaining: e.attemptsRemaining,
+      };
     }
   }, []);
 
-  const register = useCallback(async (params: RegisterParams) => {
+  const register = useCallback(async (params: RegisterParams): Promise<AuthResult> => {
     setError(null);
     setIsLoading(true);
     try {
@@ -66,6 +88,10 @@ export function useSpaceChildAuth(): UseSpaceChildAuthReturn {
     } catch (e: any) {
       setError(e.message);
       setIsLoading(false);
+      // Handle rate limiting
+      if (e.statusCode === 429) {
+        return { success: false, error: e.message, retryAfter: e.retryAfter };
+      }
       return { success: false, error: e.message };
     }
   }, []);

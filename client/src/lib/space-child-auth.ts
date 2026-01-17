@@ -1,7 +1,14 @@
 /**
  * Space Child Auth Client Library
- * Unified authentication for ChessAI/SonicVision
+ * Unified authentication with Zero-Knowledge Proof support
  */
+
+import {
+  generateCommitment,
+  generateProof,
+  type ZKPCommitment,
+  type ZKPProof,
+} from '@shared/zkp-crypto';
 
 // Auth API base URL
 const AUTH_BASE_URL = '/api/space-child-auth';
@@ -38,6 +45,7 @@ export interface AuthResponse {
   user: User;
   accessToken: string;
   refreshToken: string;
+  zkpSalt?: string;
 }
 
 export interface RegisterResponse {
@@ -46,22 +54,32 @@ export interface RegisterResponse {
   message?: string;
   accessToken?: string;
   refreshToken?: string;
+  zkpSalt?: string;
 }
 
 export interface AuthError extends Error {
   requiresVerification?: boolean;
   statusCode?: number;
+  attemptsRemaining?: number;
+  retryAfter?: number;
+}
+
+interface ChallengeResponse {
+  challenge: string;
+  sessionId: string;
+  salt: string;
 }
 
 const ACCESS_TOKEN_KEY = 'space-child-access-token';
 const REFRESH_TOKEN_KEY = 'space-child-refresh-token';
+const ZKP_SALT_KEY = 'space-child-zkp-salt';
 
 export function getStoredTokens(): AuthTokens | null {
   if (typeof window === 'undefined') return null;
-  
+
   const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  
+
   if (accessToken && refreshToken) {
     return { accessToken, refreshToken };
   }
@@ -70,19 +88,149 @@ export function getStoredTokens(): AuthTokens | null {
 
 export function setStoredTokens(tokens: AuthTokens): void {
   if (typeof window === 'undefined') return;
-  
+
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
 }
 
 export function clearStoredTokens(): void {
   if (typeof window === 'undefined') return;
-  
+
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(ZKP_SALT_KEY);
 }
 
+export function getStoredZKPSalt(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(ZKP_SALT_KEY);
+}
+
+export function setStoredZKPSalt(salt: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ZKP_SALT_KEY, salt);
+}
+
+/**
+ * Register with ZKP - generates commitment client-side
+ */
+export async function register(params: RegisterParams): Promise<RegisterResponse> {
+  // Generate ZKP commitment from password
+  const zkpCommitment = await generateCommitment(params.password);
+
+  const response = await fetch(`${AUTH_BASE_URL}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: params.email,
+      zkpCommitment,
+      firstName: params.firstName,
+      lastName: params.lastName,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    const authError: AuthError = new Error(error.message || error.error || 'Registration failed');
+    authError.statusCode = response.status;
+    if (response.status === 429) {
+      authError.retryAfter = error.retryAfter;
+    }
+    throw authError;
+  }
+
+  const data: RegisterResponse = await response.json();
+
+  if (data.accessToken && data.refreshToken) {
+    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  }
+
+  if (data.zkpSalt) {
+    setStoredZKPSalt(data.zkpSalt);
+  }
+
+  return data;
+}
+
+/**
+ * Login with ZKP - two-step process:
+ * 1. Request challenge from server
+ * 2. Generate proof and verify
+ */
 export async function login(params: LoginParams): Promise<AuthResponse> {
+  // Step 1: Request challenge
+  const challengeResponse = await fetch(`${AUTH_BASE_URL}/login/challenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: params.email }),
+  });
+
+  if (!challengeResponse.ok) {
+    const error = await challengeResponse.json();
+    const authError: AuthError = new Error(error.message || error.error || 'Failed to get challenge');
+    authError.statusCode = challengeResponse.status;
+    if (challengeResponse.status === 429) {
+      authError.retryAfter = error.retryAfter;
+    }
+    throw authError;
+  }
+
+  const challengeData: ChallengeResponse = await challengeResponse.json();
+
+  // Step 2: Generate proof and verify
+  const proof = await generateProof(
+    params.password,
+    challengeData.salt,
+    challengeData.challenge,
+    challengeData.sessionId
+  );
+
+  const verifyResponse = await fetch(`${AUTH_BASE_URL}/login/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: params.email,
+      proof,
+    }),
+  });
+
+  const data = await verifyResponse.json();
+
+  if (!verifyResponse.ok) {
+    const authError: AuthError = new Error(data.message || data.error || 'Login failed');
+    authError.requiresVerification = data.requiresVerification;
+    authError.statusCode = verifyResponse.status;
+    authError.attemptsRemaining = data.attemptsRemaining;
+    if (verifyResponse.status === 429) {
+      authError.retryAfter = data.retryAfter;
+    }
+    throw authError;
+  }
+
+  if (data.accessToken && data.refreshToken) {
+    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  }
+
+  // Store salt for future logins
+  if (challengeData.salt) {
+    setStoredZKPSalt(challengeData.salt);
+  }
+
+  // If login succeeded but requires verification, throw with flag
+  if (data.requiresVerification) {
+    const error: AuthError = new Error('Email verification required');
+    error.requiresVerification = true;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Legacy login - fallback for accounts without ZKP setup
+ * This sends the password directly (less secure)
+ */
+export async function loginLegacy(params: LoginParams): Promise<AuthResponse> {
   const response = await fetch(`${AUTH_BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -95,67 +243,71 @@ export async function login(params: LoginParams): Promise<AuthResponse> {
     const error: AuthError = new Error(data.message || data.error || 'Login failed');
     error.requiresVerification = data.requiresVerification;
     error.statusCode = response.status;
+    error.attemptsRemaining = data.attemptsRemaining;
+    if (response.status === 429) {
+      error.retryAfter = data.retryAfter;
+    }
     throw error;
   }
 
   if (data.accessToken && data.refreshToken) {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   }
-  
-  // If login succeeded but requires verification, throw with flag
+
+  if (data.zkpSalt) {
+    setStoredZKPSalt(data.zkpSalt);
+  }
+
   if (data.requiresVerification) {
     const error: AuthError = new Error('Email verification required');
     error.requiresVerification = true;
-    // Still store tokens so user can access their account
     throw error;
   }
-  
+
   return data;
 }
 
-export async function register(params: RegisterParams): Promise<RegisterResponse> {
-  const response = await fetch(`${AUTH_BASE_URL}/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Registration failed');
+/**
+ * Smart login - tries ZKP first, falls back to legacy
+ */
+export async function smartLogin(params: LoginParams): Promise<AuthResponse> {
+  try {
+    return await login(params);
+  } catch (error) {
+    // If ZKP login fails with invalid credentials, try legacy
+    // (for accounts created before ZKP was implemented)
+    if (error instanceof Error && (error as AuthError).statusCode === 401) {
+      console.log('[Auth] ZKP login failed, trying legacy login...');
+      return await loginLegacy(params);
+    }
+    throw error;
   }
-
-  const data: RegisterResponse = await response.json();
-  
-  if (data.accessToken && data.refreshToken) {
-    setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-  }
-  
-  return data;
 }
 
 export async function logout(): Promise<void> {
   const tokens = getStoredTokens();
-  
+
   if (tokens?.accessToken) {
     try {
       await fetch(`${AUTH_BASE_URL}/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${tokens.accessToken}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
       });
     } catch (e) {
       // Ignore logout errors
     }
   }
-  
+
   clearStoredTokens();
 }
 
 export async function getCurrentUser(): Promise<User | null> {
   const tokens = getStoredTokens();
-  
+
   if (!tokens?.accessToken) {
     return null;
   }
@@ -189,7 +341,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export async function refreshAccessToken(): Promise<boolean> {
   const tokens = getStoredTokens();
-  
+
   if (!tokens?.refreshToken) {
     return false;
   }
@@ -223,12 +375,11 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
   });
 
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.message || data.error || 'Verification failed');
   }
 
-  // Store tokens if provided
   if (data.accessToken && data.refreshToken) {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   }
@@ -244,7 +395,7 @@ export async function resendVerification(email: string): Promise<{ success: bool
   });
 
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.error || 'Failed to resend');
   }
@@ -260,7 +411,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   });
 
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.error || 'Failed to send reset email');
   }
@@ -268,22 +419,31 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   return data;
 }
 
-export async function resetPassword(token: string, password: string): Promise<{ success: boolean; message: string; user?: User; accessToken?: string; refreshToken?: string }> {
+/**
+ * Reset password with ZKP - generates new commitment
+ */
+export async function resetPassword(token: string, password: string): Promise<{ success: boolean; message: string; user?: User; accessToken?: string; refreshToken?: string; zkpSalt?: string }> {
+  // Generate new ZKP commitment
+  const zkpCommitment = await generateCommitment(password);
+
   const response = await fetch(`${AUTH_BASE_URL}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, zkpCommitment }),
   });
 
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.message || data.error || 'Password reset failed');
   }
 
-  // Store tokens if provided
   if (data.accessToken && data.refreshToken) {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  }
+
+  if (data.zkpSalt) {
+    setStoredZKPSalt(data.zkpSalt);
   }
 
   return data;
@@ -292,14 +452,14 @@ export async function resetPassword(token: string, password: string): Promise<{ 
 export function createAuthenticatedFetch() {
   return async (url: string, options: RequestInit = {}): Promise<Response> => {
     const tokens = getStoredTokens();
-    
+
     const headers = new Headers(options.headers);
     if (tokens?.accessToken) {
       headers.set('Authorization', `Bearer ${tokens.accessToken}`);
     }
-    
+
     let response = await fetch(url, { ...options, headers });
-    
+
     if (response.status === 401 && tokens?.refreshToken) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
@@ -310,9 +470,12 @@ export function createAuthenticatedFetch() {
         }
       }
     }
-    
+
     return response;
   };
 }
 
 export const authFetch = createAuthenticatedFetch();
+
+// Re-export ZKP types for convenience
+export type { ZKPCommitment, ZKPProof };
