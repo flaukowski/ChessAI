@@ -9,14 +9,41 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { GitBranch, Volume2, Mic, Speaker, Check, X } from "lucide-react";
+import {
+  GitBranch,
+  Volume2,
+  Mic,
+  Speaker,
+  Check,
+  X,
+  Bluetooth,
+  Usb,
+  Plug,
+  Monitor,
+  Cpu,
+  Layers,
+  HelpCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AudioChannel, RoutingConnection } from "@/lib/dsp/bluetooth-audio-manager";
+import type { AdapterAudioChannel, AdapterRoutingConnection } from "@/lib/dsp/audio-adapter-manager";
+import type { AudioConnectionType } from "@/lib/dsp/audio-adapter-types";
+import { CONNECTION_TYPE_INFO, getLatencyColor } from "@/lib/dsp/audio-adapter-types";
+
+// Icon mapping for connection types
+const CONNECTION_ICONS: Record<AudioConnectionType, React.ComponentType<{ className?: string }>> = {
+  bluetooth: Bluetooth,
+  usb: Usb,
+  'audio-jack': Plug,
+  hdmi: Monitor,
+  'built-in': Cpu,
+  virtual: Layers,
+  unknown: HelpCircle,
+};
 
 interface AudioRoutingMatrixProps {
-  inputChannels: AudioChannel[];
-  outputChannels: AudioChannel[];
-  routingMatrix: RoutingConnection[];
+  inputChannels: AdapterAudioChannel[];
+  outputChannels: AdapterAudioChannel[];
+  routingMatrix: AdapterRoutingConnection[];
   channelLevels: { [channelId: string]: { peak: number; rms: number } };
   onSetRouting: (
     inputChannelId: string,
@@ -47,7 +74,7 @@ export function AudioRoutingMatrix({
   onSetChannelPan,
   className,
 }: AudioRoutingMatrixProps) {
-  const getRouting = (inputId: string, outputId: string): RoutingConnection | undefined => {
+  const getRouting = (inputId: string, outputId: string): AdapterRoutingConnection | undefined => {
     return routingMatrix.find(
       (r) => r.inputChannelId === inputId && r.outputChannelId === outputId
     );
@@ -85,38 +112,73 @@ export function AudioRoutingMatrix({
                     <th className="p-2 text-xs text-left text-muted-foreground w-32">
                       Input → Output
                     </th>
-                    {outputChannels.map((output) => (
-                      <th key={output.id} className="p-2 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <Speaker
-                            className="w-4 h-4"
-                            style={{ color: output.color }}
-                          />
-                          <span className="text-[10px] max-w-16 truncate block">
-                            {output.name}
-                          </span>
-                          <LevelMeter
-                            level={channelLevels[output.id]?.peak || 0}
-                            color={output.color}
-                          />
-                        </div>
-                      </th>
-                    ))}
+                    {outputChannels.map((output) => {
+                      const ConnectionIcon = CONNECTION_ICONS[output.connectionType];
+                      const connectionInfo = CONNECTION_TYPE_INFO[output.connectionType];
+                      const latencyColor = getLatencyColor(output.latencyMs);
+
+                      return (
+                        <th key={output.id} className="p-2 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1">
+                              <span style={{ color: output.color }}>
+                                <Speaker className="w-4 h-4" />
+                              </span>
+                              <span style={{ color: connectionInfo.color }}>
+                                <ConnectionIcon className="w-3 h-3" />
+                              </span>
+                            </div>
+                            <span className="text-[10px] max-w-16 truncate block">
+                              {output.name}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className="text-[8px] px-1 py-0 h-3"
+                              style={{ borderColor: latencyColor, color: latencyColor }}
+                            >
+                              {output.latencyMs}ms
+                            </Badge>
+                            <LevelMeter
+                              level={channelLevels[output.id]?.peak || 0}
+                              color={output.color}
+                            />
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
-                  {inputChannels.map((input) => (
+                  {inputChannels.map((input) => {
+                    const ConnectionIcon = CONNECTION_ICONS[input.connectionType];
+                    const connectionInfo = CONNECTION_TYPE_INFO[input.connectionType];
+                    const latencyColor = getLatencyColor(input.latencyMs);
+
+                    return (
                     <tr key={input.id} className="border-t border-border/50">
                       <td className="p-2">
                         <div className="flex items-center gap-2">
-                          <Mic
-                            className="w-4 h-4"
-                            style={{ color: input.color }}
-                          />
-                          <div className="flex flex-col">
-                            <span className="text-xs truncate max-w-24">
-                              {input.name}
+                          <div className="flex items-center gap-1">
+                            <span style={{ color: input.color }}>
+                              <Mic className="w-4 h-4" />
                             </span>
+                            <span style={{ color: connectionInfo.color }}>
+                              <ConnectionIcon className="w-3 h-3" />
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs truncate max-w-20">
+                                {input.name}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="text-[8px] px-1 py-0 h-3"
+                                style={{ borderColor: latencyColor, color: latencyColor }}
+                              >
+                                {input.latencyMs}ms
+                              </Badge>
+                            </div>
                             <LevelMeter
                               level={channelLevels[input.id]?.peak || 0}
                               color={input.color}
@@ -177,7 +239,8 @@ export function AudioRoutingMatrix({
                         );
                       })}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -268,7 +331,7 @@ function LevelMeter({ level, color, horizontal }: LevelMeterProps) {
 }
 
 interface ChannelControlsProps {
-  channel: AudioChannel;
+  channel: AdapterAudioChannel;
   showPan?: boolean;
   onVolumeChange: (volume: number) => void;
   onPanChange?: (pan: number) => void;
@@ -280,16 +343,34 @@ function ChannelControls({
   onVolumeChange,
   onPanChange,
 }: ChannelControlsProps) {
+  const ConnectionIcon = CONNECTION_ICONS[channel.connectionType];
+  const connectionInfo = CONNECTION_TYPE_INFO[channel.connectionType];
+  const latencyColor = getLatencyColor(channel.latencyMs);
+
   return (
     <div
       className="p-2 rounded-md bg-muted/30"
       style={{ borderLeft: `3px solid ${channel.color}` }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium truncate max-w-32">{channel.name}</span>
-        <Badge variant="outline" className="text-[10px]">
-          {Math.round(channel.volume * 100)}%
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <span className="flex-shrink-0" style={{ color: connectionInfo.color }}>
+            <ConnectionIcon className="w-3 h-3" />
+          </span>
+          <span className="text-xs font-medium truncate max-w-24">{channel.name}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1 py-0 h-4"
+            style={{ borderColor: latencyColor, color: latencyColor }}
+          >
+            {channel.latencyMs}ms
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {Math.round(channel.volume * 100)}%
+          </Badge>
+        </div>
       </div>
 
       {/* Volume */}

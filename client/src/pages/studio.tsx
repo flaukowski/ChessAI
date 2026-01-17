@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, Home, LogOut, Bluetooth, Waves, ChevronLeft, Download, FileAudio, Loader2 } from 'lucide-react';
+import { Volume2, Home, LogOut, Headphones, Waves, ChevronLeft, Download, FileAudio, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,12 +17,12 @@ import { AudioInput } from '@/components/audio-input';
 import { AudioVisualizer } from '@/components/audio-visualizer';
 import { Pedalboard } from '@/components/pedalboard';
 import { AIEffectSuggester, type EffectType } from '@/components/ai-effect-suggester';
-import { BluetoothDevicePanel } from '@/components/bluetooth-device-panel';
+import { AudioAdapterPanel } from '@/components/audio-adapter-panel';
 import { AudioRoutingMatrix } from '@/components/audio-routing-matrix';
 import { MobileNav, MobileHeader } from '@/components/mobile-nav';
 
 import { usePedalboard, type WorkletEffectType } from '@/hooks/use-pedalboard';
-import { useBluetoothAudio } from '@/hooks/use-bluetooth-audio';
+import { useAudioAdapter } from '@/hooks/use-audio-adapter';
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { decodePresetFromUrl, initializeDefaultPresets } from '@/lib/preset-manager';
@@ -208,9 +208,10 @@ export default function Studio() {
     outputChannels,
     routingMatrix,
     bandwidthWarning,
+    latencyWarning,
     isScanning,
     channelLevels,
-    initialize: initializeBluetooth,
+    initialize: initializeAudioAdapter,
     scanDevices,
     createInputChannel,
     createOutputChannel,
@@ -221,12 +222,14 @@ export default function Studio() {
     updateRoutingGain,
     setChannelVolume,
     setChannelPan,
-  } = useBluetoothAudio();
+    applyPreset,
+    getPresets,
+  } = useAudioAdapter();
 
   useEffect(() => {
     initializeAudio();
-    initializeBluetooth();
-  }, [initializeAudio, initializeBluetooth]);
+    initializeAudioAdapter();
+  }, [initializeAudio, initializeAudioAdapter]);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -450,19 +453,22 @@ export default function Studio() {
 
   const renderRoutingView = () => (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-      <BluetoothDevicePanel
+      <AudioAdapterPanel
         devices={devices}
         inputChannels={inputChannels}
         outputChannels={outputChannels}
         isScanning={isScanning}
         bandwidthWarning={bandwidthWarning}
+        latencyWarning={latencyWarning}
+        presets={getPresets()}
         onScanDevices={scanDevices}
         onCreateInputChannel={createInputChannel}
         onCreateOutputChannel={createOutputChannel}
         onRemoveChannel={removeChannel}
         onSetChannelMute={setChannelMute}
+        onApplyPreset={applyPreset}
       />
-      
+
       <AudioRoutingMatrix
         inputChannels={inputChannels}
         outputChannels={outputChannels}
@@ -594,7 +600,7 @@ export default function Studio() {
               DSP Effects
             </TabsTrigger>
             <TabsTrigger value="routing" className="flex items-center gap-2" data-testid="tab-routing">
-              <Bluetooth className="w-4 h-4" />
+              <Headphones className="w-4 h-4" />
               Audio Routing
             </TabsTrigger>
           </TabsList>
