@@ -1,0 +1,64 @@
+# =============================================================================
+# Docker Ignore File
+# =============================================================================
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+build
+.next
+out
+
+# Development files
+.git
+.gitignore
+*.md
+!README.md
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Test files
+coverage
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+__mocks__
+
+# Environment files (use Docker secrets or env vars instead)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Docker files (don't include in build context)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+docs
+*.md
+
+# Misc
+.eslintcache
+.turbo
+*.tsbuildinfo

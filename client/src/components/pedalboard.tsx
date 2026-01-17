@@ -39,6 +39,7 @@ import {
   Guitar,
   Volume2,
   VolumeX,
+  Waves,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -175,6 +176,20 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
   },
+  reverb: {
+    label: 'Reverb',
+    icon: <Waves className="w-4 h-4" />,
+    color: 'from-cyan-500 to-blue-500',
+    description: 'Algorithmic reverb for room simulation and spatial depth',
+    params: [
+      { key: 'roomSize', label: 'Room Size', min: 0, max: 1, step: 0.05 },
+      { key: 'damping', label: 'Damping', min: 0, max: 1, step: 0.05 },
+      { key: 'preDelay', label: 'Pre-Delay', min: 0, max: 100, step: 1, unit: 'ms' },
+      { key: 'decay', label: 'Decay', min: 0.1, max: 10, step: 0.1, unit: 's' },
+      { key: 'width', label: 'Width', min: 0, max: 1, step: 0.05 },
+      { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
+    ],
+  },
 };
 
 // Extended distortion modes including new waveshaper primitives from AudioNoise PR #64
@@ -189,6 +204,7 @@ const gradientToKnobColor: Record<string, string> = {
   'from-indigo-500 to-violet-500': 'purple',
   'from-amber-500 to-yellow-500': 'orange',
   'from-rose-500 to-pink-500': 'pink',
+  'from-cyan-500 to-blue-500': 'cyan',
 };
 
 const TREMOLO_WAVEFORMS = ['Sine', 'Triangle'];

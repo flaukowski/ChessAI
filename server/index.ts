@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import helmet from "helmet";
 import cors from "cors";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nanoid } from "nanoid";
@@ -67,6 +68,23 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-CSRF-Token'],
   exposedHeaders: ['X-Request-ID'],
   maxAge: 86400, // 24 hours
+}));
+
+// =============================================================================
+// RESPONSE COMPRESSION
+// =============================================================================
+// Compress responses for better performance (gzip/deflate)
+app.use(compression({
+  level: 6, // Balanced compression level
+  threshold: 1024, // Only compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress if client doesn't accept it
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Use compression's default filter (checks Accept-Encoding)
+    return compression.filter(req, res);
+  },
 }));
 
 const getSessionSecret = () => {

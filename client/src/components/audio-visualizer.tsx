@@ -18,6 +18,25 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
   const animationRef = useRef<number>();
   const [visualType, setVisualType] = useState<VisualizationType>('waveform');
   const spectrogramDataRef = useRef<Uint8Array[]>([]);
+  const maxSpectrogramHistory = useRef<number>(256); // Limit memory usage
+
+  // Clear spectrogram data when visualization type changes or on unmount
+  useEffect(() => {
+    // Clear previous data when switching to/from spectrogram
+    spectrogramDataRef.current = [];
+
+    return () => {
+      // Clear on unmount to prevent memory leak
+      spectrogramDataRef.current = [];
+    };
+  }, [visualType]);
+
+  // Clear spectrogram data when playback stops
+  useEffect(() => {
+    if (!isPlaying) {
+      spectrogramDataRef.current = [];
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -32,6 +51,8 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
       if (ctx) {
         ctx.scale(dpr, dpr);
       }
+      // Update max history based on canvas width
+      maxSpectrogramHistory.current = Math.min(256, Math.floor(rect.width / 2));
     };
 
     resizeCanvas();
@@ -166,23 +187,38 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
   };
 
   const drawSpectrogram = (ctx: CanvasRenderingContext2D, data: Uint8Array, width: number, height: number) => {
-    // Store historical data for spectrogram
-    const newData = new Uint8Array(data);
+    const maxHistory = maxSpectrogramHistory.current;
+
+    // Store downsampled historical data to reduce memory usage
+    // Only keep every 4th frequency bin (128 -> 32 values per column)
+    const downsampleFactor = 4;
+    const downsampledLength = Math.ceil(data.length / downsampleFactor);
+    const newData = new Uint8Array(downsampledLength);
+    for (let i = 0; i < downsampledLength; i++) {
+      // Take max value in the bin range for better visualization
+      let maxVal = 0;
+      for (let j = 0; j < downsampleFactor && (i * downsampleFactor + j) < data.length; j++) {
+        maxVal = Math.max(maxVal, data[i * downsampleFactor + j]);
+      }
+      newData[i] = maxVal;
+    }
     spectrogramDataRef.current.push(newData);
-    
-    const maxHistory = Math.floor(width / 2);
-    if (spectrogramDataRef.current.length > maxHistory) {
+
+    // Limit history to prevent memory growth
+    while (spectrogramDataRef.current.length > maxHistory) {
       spectrogramDataRef.current.shift();
     }
 
     const history = spectrogramDataRef.current;
     const colWidth = width / maxHistory;
-    const rowHeight = height / 128;
+    const numRows = 64; // Reduced for performance
+    const rowHeight = height / numRows;
 
+    // Use ImageData for better performance on large spectrograms
     for (let x = 0; x < history.length; x++) {
       const col = history[x];
-      for (let y = 0; y < 128; y++) {
-        const idx = Math.floor((y / 128) * col.length);
+      for (let y = 0; y < numRows; y++) {
+        const idx = Math.floor((y / numRows) * col.length);
         const value = col[idx];
         const intensity = value / 255;
 

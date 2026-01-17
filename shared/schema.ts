@@ -69,6 +69,34 @@ export const loginAttempts = pgTable("login_attempts", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Audit logs for tracking all sensitive operations
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  action: text("action").notNull(), // e.g., 'user.login', 'preset.create', 'settings.update'
+  resource: text("resource"), // e.g., 'preset', 'user', 'ai_settings'
+  resourceId: varchar("resource_id"), // ID of the affected resource
+  changes: jsonb("changes"), // JSON diff of changes made
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata"), // Additional context
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// User presets for saving effect chains
+export const userPresets = pgTable("user_presets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  effectChain: jsonb("effect_chain").notNull(), // Array of effect configurations
+  tags: text("tags").array(), // Array of tags for categorization
+  isPublic: boolean("is_public").notNull().default(false),
+  shareToken: varchar("share_token").unique(), // For sharing presets
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // User AI settings for optional LLM integration (effect suggestions)
 export const userAISettings = pgTable("user_ai_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -100,6 +128,17 @@ export const updateAISettingsSchema = z.object({
   settings: z.record(z.any()).optional(),
 });
 
+// Zod schemas for presets
+export const insertPresetSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  effectChain: z.array(z.any()),
+  tags: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export const updatePresetSchema = insertPresetSchema.partial();
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UserAISettings = typeof userAISettings.$inferSelect;
@@ -110,3 +149,7 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type ZKPChallenge = typeof zkpChallenges.$inferSelect;
 export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type UserPreset = typeof userPresets.$inferSelect;
+export type InsertPreset = z.infer<typeof insertPresetSchema>;
+export type UpdatePreset = z.infer<typeof updatePresetSchema>;

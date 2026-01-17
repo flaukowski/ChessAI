@@ -946,6 +946,200 @@ class TremoloProcessor extends AudioWorkletProcessor {
   }
 }
 
+/**
+ * Reverb Processor
+ * Freeverb-style algorithmic reverb using parallel comb filters and series allpass filters
+ * Based on the classic Schroeder-Moorer reverb design
+ */
+class ReverbProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'roomSize', defaultValue: 0.5, minValue: 0, maxValue: 1 },
+      { name: 'damping', defaultValue: 0.5, minValue: 0, maxValue: 1 },
+      { name: 'preDelay', defaultValue: 10, minValue: 0, maxValue: 100 },
+      { name: 'decay', defaultValue: 1.5, minValue: 0.1, maxValue: 10 },
+      { name: 'width', defaultValue: 0.8, minValue: 0, maxValue: 1 },
+      { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
+      { name: 'mix', defaultValue: 0.3, minValue: 0, maxValue: 1 },
+    ];
+  }
+
+  constructor() {
+    super();
+    // Freeverb comb filter delay times (in samples at 44100Hz, scaled for current sample rate)
+    const scale = sampleRate / 44100;
+    this.combDelays = [
+      Math.floor(1116 * scale),
+      Math.floor(1188 * scale),
+      Math.floor(1277 * scale),
+      Math.floor(1356 * scale),
+      Math.floor(1422 * scale),
+      Math.floor(1491 * scale),
+      Math.floor(1557 * scale),
+      Math.floor(1617 * scale),
+    ];
+
+    // Allpass filter delay times
+    this.allpassDelays = [
+      Math.floor(556 * scale),
+      Math.floor(441 * scale),
+      Math.floor(341 * scale),
+      Math.floor(225 * scale),
+    ];
+
+    // Stereo spread (offset for right channel)
+    this.stereoSpread = Math.floor(23 * scale);
+
+    // Create comb filter buffers (8 per channel)
+    this.combBuffersL = this.combDelays.map(d => new Float32Array(d + this.stereoSpread));
+    this.combBuffersR = this.combDelays.map(d => new Float32Array(d + this.stereoSpread));
+    this.combIndexL = new Array(8).fill(0);
+    this.combIndexR = new Array(8).fill(0);
+    this.combFilterState = [new Float32Array(8), new Float32Array(8)]; // Damping filter state
+
+    // Create allpass filter buffers (4 per channel)
+    this.allpassBuffersL = this.allpassDelays.map(d => new Float32Array(d + this.stereoSpread));
+    this.allpassBuffersR = this.allpassDelays.map(d => new Float32Array(d + this.stereoSpread));
+    this.allpassIndexL = new Array(4).fill(0);
+    this.allpassIndexR = new Array(4).fill(0);
+
+    // Pre-delay buffer (max 100ms)
+    this.preDelaySize = Math.floor(sampleRate * 0.1);
+    this.preDelayBuffer = [new Float32Array(this.preDelaySize), new Float32Array(this.preDelaySize)];
+    this.preDelayIndex = 0;
+
+    // Allpass feedback coefficient
+    this.allpassFeedback = 0.5;
+  }
+
+  // Comb filter with damping (lowpass in feedback loop)
+  processComb(input, buffer, index, bufferSize, feedback, damping, filterState, stateIdx) {
+    const delayed = buffer[index];
+
+    // One-pole lowpass filter for damping
+    filterState[stateIdx] = delayed * (1 - damping) + filterState[stateIdx] * damping;
+
+    // Write new sample with feedback
+    buffer[index] = input + filterState[stateIdx] * feedback;
+
+    return delayed;
+  }
+
+  // Allpass filter
+  processAllpass(input, buffer, index, bufferSize) {
+    const delayed = buffer[index];
+    const output = -input + delayed;
+    buffer[index] = input + delayed * this.allpassFeedback;
+    return output;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const output = outputs[0];
+
+    if (!input || !input[0]) return true;
+
+    const bypass = parameters.bypass[0] > 0.5;
+    const mix = parameters.mix[0];
+    const roomSize = parameters.roomSize[0];
+    const damping = parameters.damping[0];
+    const preDelayMs = parameters.preDelay[0];
+    const decay = parameters.decay[0];
+    const width = parameters.width[0];
+
+    // Calculate feedback based on room size and decay
+    const feedback = 0.7 + roomSize * 0.28; // Range 0.7-0.98
+    const decayFactor = Math.pow(0.001, 1 / (decay * sampleRate)); // RT60 based decay
+
+    const preDelaySamples = Math.floor(preDelayMs * sampleRate / 1000);
+    const blockSize = input[0].length;
+
+    // Stereo width processing coefficients
+    const wet1 = (1 + width) / 2;
+    const wet2 = (1 - width) / 2;
+
+    for (let i = 0; i < blockSize; i++) {
+      // Get input (mono sum for reverb input)
+      const inputL = input[0] ? input[0][i] : 0;
+      const inputR = input[1] ? input[1][i] : inputL;
+      const monoIn = (inputL + inputR) * 0.5;
+
+      if (bypass) {
+        if (output[0]) output[0][i] = inputL;
+        if (output[1]) output[1][i] = inputR;
+        continue;
+      }
+
+      // Pre-delay
+      const preDelayReadIdx = (this.preDelayIndex - preDelaySamples + this.preDelaySize) % this.preDelaySize;
+      const preDelayed = this.preDelayBuffer[0][preDelayReadIdx];
+      this.preDelayBuffer[0][this.preDelayIndex] = monoIn;
+      this.preDelayIndex = (this.preDelayIndex + 1) % this.preDelaySize;
+
+      // Process parallel comb filters
+      let outL = 0;
+      let outR = 0;
+
+      for (let c = 0; c < 8; c++) {
+        const delayL = this.combDelays[c];
+        const delayR = delayL + this.stereoSpread;
+
+        // Left channel comb
+        outL += this.processComb(
+          preDelayed,
+          this.combBuffersL[c],
+          this.combIndexL[c],
+          delayL,
+          feedback * decayFactor,
+          damping,
+          this.combFilterState[0],
+          c
+        );
+        this.combIndexL[c] = (this.combIndexL[c] + 1) % delayL;
+
+        // Right channel comb (with stereo spread)
+        outR += this.processComb(
+          preDelayed,
+          this.combBuffersR[c],
+          this.combIndexR[c],
+          delayR,
+          feedback * decayFactor,
+          damping,
+          this.combFilterState[1],
+          c
+        );
+        this.combIndexR[c] = (this.combIndexR[c] + 1) % delayR;
+      }
+
+      // Scale comb output
+      outL *= 0.125;
+      outR *= 0.125;
+
+      // Process series allpass filters
+      for (let a = 0; a < 4; a++) {
+        const delayL = this.allpassDelays[a];
+        const delayR = delayL + this.stereoSpread;
+
+        outL = this.processAllpass(outL, this.allpassBuffersL[a], this.allpassIndexL[a], delayL);
+        this.allpassIndexL[a] = (this.allpassIndexL[a] + 1) % delayL;
+
+        outR = this.processAllpass(outR, this.allpassBuffersR[a], this.allpassIndexR[a], delayR);
+        this.allpassIndexR[a] = (this.allpassIndexR[a] + 1) % delayR;
+      }
+
+      // Apply stereo width
+      const wetL = outL * wet1 + outR * wet2;
+      const wetR = outR * wet1 + outL * wet2;
+
+      // Mix output
+      if (output[0]) output[0][i] = inputL * (1 - mix) + wetL * mix;
+      if (output[1]) output[1][i] = inputR * (1 - mix) + wetR * mix;
+    }
+
+    return true;
+  }
+}
+
 // Register all processors
 registerProcessor('eq-processor', EQProcessor);
 registerProcessor('distortion-processor', DistortionProcessor);
@@ -955,3 +1149,4 @@ registerProcessor('compressor-processor', CompressorProcessor);
 registerProcessor('level-meter-processor', LevelMeterProcessor);
 registerProcessor('basspurr-processor', BassPurrProcessor);
 registerProcessor('tremolo-processor', TremoloProcessor);
+registerProcessor('reverb-processor', ReverbProcessor);
