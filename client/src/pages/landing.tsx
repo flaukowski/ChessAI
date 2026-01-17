@@ -19,6 +19,8 @@ import { PWAInstallPrompt, OfflineIndicator, UpdateBanner } from '@/components/p
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useLocation } from 'wouter';
 
+import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_1768261396578.png";
+
 export default function Landing() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
@@ -148,7 +150,7 @@ export default function Landing() {
       <footer className="py-12 px-6 border-t border-white/10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
-            <Volume2 className="w-6 h-6 text-cyan-400" />
+            <img src={alienOctopusLogo} alt="AudioNoise Logo" className="w-8 h-8 object-contain" />
             <span className="font-bold text-xl">AudioNoise Web</span>
             <span className="text-gray-500 text-sm">ported from torvalds/AudioNoise</span>
           </div>
