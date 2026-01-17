@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import { storage } from './storage';
 import type { User } from '@shared/schema';
+import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 
 const router = Router();
 
@@ -128,8 +129,13 @@ router.post('/register', async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
     await storage.createEmailVerificationToken(user.id, verificationToken, expiresAt);
 
-    // In production, send verification email here
-    console.log(`[Auth] Verification token for ${email}: ${verificationToken}`);
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, verificationToken, firstName);
+      console.log(`[Auth] Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error('[Auth] Failed to send verification email:', emailError);
+    }
 
     // For now, we'll return requiresVerification but also generate tokens
     // In strict mode, you'd wait for verification before issuing tokens
@@ -401,8 +407,13 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
     await storage.createEmailVerificationToken(user.id, verificationToken, expiresAt);
 
-    // In production, send verification email here
-    console.log(`[Auth] Verification token for ${email}: ${verificationToken}`);
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, verificationToken, user.firstName);
+      console.log(`[Auth] Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error('[Auth] Failed to send verification email:', emailError);
+    }
 
     res.json({ 
       success: true, 
@@ -446,8 +457,13 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
     await storage.createPasswordResetToken(user.id, resetToken, expiresAt);
 
-    // In production, send password reset email here
-    console.log(`[Auth] Password reset token for ${email}: ${resetToken}`);
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail(email, resetToken);
+      console.log(`[Auth] Password reset email sent to ${email}`);
+    } catch (emailError) {
+      console.error('[Auth] Failed to send password reset email:', emailError);
+    }
 
     res.json({ 
       success: true, 
