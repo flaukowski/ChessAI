@@ -37,6 +37,8 @@ import {
   type ExportOptions,
 } from '@/lib/dsp/audio-export';
 
+import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_1768261396578.png";
+
 export default function Studio() {
   const [, navigate] = useLocation();
   const searchString = useSearch();
@@ -556,9 +558,7 @@ export default function Studio() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-600 flex items-center justify-center">
-                <Volume2 className="w-4 h-4 text-white" />
-              </div>
+              <img src={alienOctopusLogo} alt="Logo" className="w-8 h-8 object-contain" />
               <span className="font-bold text-xl text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
                 AudioNoise Studio
               </span>
