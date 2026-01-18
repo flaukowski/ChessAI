@@ -127,7 +127,7 @@ export default function ResetPasswordPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500"
+                className="w-full"
               >
                 Reset Password
               </Button>
@@ -151,7 +151,7 @@ export default function ResetPasswordPage() {
             <p className="text-gray-400 mb-6">{message}</p>
             <Button 
               onClick={() => setLocation("/")}
-              className="w-full bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500"
+              className="w-full"
             >
               Continue to App
             </Button>
@@ -168,7 +168,7 @@ export default function ResetPasswordPage() {
             <div className="space-y-3">
               <Button 
                 onClick={() => setStatus("form")}
-                className="w-full bg-gradient-to-r from-cyan-600 to-purple-600"
+                className="w-full"
               >
                 Try Again
               </Button>

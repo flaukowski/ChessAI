@@ -178,7 +178,7 @@ export default function Terms() {
           <div className="mt-12 text-center">
             <Button
               onClick={() => navigate('/')}
-              className="bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500"
+              className=""
             >
               Back to Home
             </Button>

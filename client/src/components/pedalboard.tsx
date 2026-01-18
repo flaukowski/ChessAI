@@ -765,7 +765,7 @@ export function Pedalboard({
             </Select>
             <Button
               onClick={() => onAddEffect(selectedEffectType)}
-              className="bg-gradient-to-r from-cyan-500 to-purple-600"
+              className=""
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Effect

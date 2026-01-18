@@ -413,7 +413,7 @@ export function AIEffectChat({
                         {onApplyChain && msg.effectSuggestions.length > 1 && (
                           <Button
                             size="sm"
-                            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-xs h-7"
+                            className="w-full text-xs h-7"
                             onClick={() => onApplyChain(msg.effectSuggestions!)}
                             data-testid={`button-apply-all-${msg.id}`}
                           >

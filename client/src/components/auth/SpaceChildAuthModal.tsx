@@ -186,7 +186,7 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-slate-800 border-white/10 text-white" required />
               </div>
               {displayError && <p className="text-red-400 text-sm">{displayError}</p>}
-              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-600 to-purple-600" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Send Reset Link
               </Button>

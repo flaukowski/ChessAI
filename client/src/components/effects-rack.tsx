@@ -310,7 +310,7 @@ export function EffectsRack({ className }: EffectsRackProps) {
               />
               <Button 
                 onClick={() => handleAddEffect()} 
-                className="w-full mt-3 bg-gradient-to-r from-cyan-500 to-purple-600"
+                className="w-full mt-3"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add {EFFECT_CONFIGS[selectedEffect]?.label || 'Effect'}
@@ -334,7 +334,7 @@ export function EffectsRack({ className }: EffectsRackProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button onClick={() => handleAddEffect()} className="bg-gradient-to-r from-cyan-500 to-purple-600">
+                <Button onClick={() => handleAddEffect()}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add
                 </Button>

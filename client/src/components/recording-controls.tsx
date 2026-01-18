@@ -226,7 +226,7 @@ export function RecordingControls({
 
                     {/* Stop (save) */}
                     <Button
-                      variant="default"
+                      variant="glass"
                       size="icon"
                       onClick={handleStopRecording}
                       className="h-9 w-9 bg-red-500 hover:bg-red-600"
