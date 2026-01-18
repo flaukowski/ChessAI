@@ -1,0 +1,69 @@
+{
+  "agents": {
+    "audionoise-worker-1768708498754-xu2f": {
+      "agentId": "audionoise-worker-1768708498754-xu2f",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T03:54:58.754Z",
+      "domain": "hive-mind"
+    },
+    "audionoise-worker-1768708498754-43cy": {
+      "agentId": "audionoise-worker-1768708498754-43cy",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T03:54:58.754Z",
+      "domain": "hive-mind"
+    },
+    "audionoise-worker-1768708498754-7jsq": {
+      "agentId": "audionoise-worker-1768708498754-7jsq",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T03:54:58.754Z",
+      "domain": "hive-mind"
+    },
+    "audionoise-worker-1768708498754-b16d": {
+      "agentId": "audionoise-worker-1768708498754-b16d",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T03:54:58.754Z",
+      "domain": "hive-mind"
+    },
+    "audionoise-worker-1768708498754-vz9z": {
+      "agentId": "audionoise-worker-1768708498754-vz9z",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T03:54:58.754Z",
+      "domain": "hive-mind"
+    }
+  }
+}

@@ -166,10 +166,10 @@ export default function Landing() {
           </div>
           
           <div className="flex items-center gap-6 text-sm text-gray-400">
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Support</a>
-            <a 
+            <a href="/terms" className="hover:text-white transition-colors">Terms</a>
+            <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
+            <a href="/support" className="hover:text-white transition-colors">Support</a>
+            <a
               href="https://etherscan.io/address/REDACTED_WALLET_ADDRESS"
               target="_blank"
               rel="noopener noreferrer"

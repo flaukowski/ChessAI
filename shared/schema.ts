@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, jsonb, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, boolean, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -108,6 +108,40 @@ export const userAISettings = pgTable("user_ai_settings", {
   settings: jsonb("settings"), // provider-specific settings
 });
 
+// User recordings for processed audio
+export const recordings = pgTable("recordings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  duration: integer("duration").notNull(), // in seconds
+  fileSize: integer("file_size").notNull(), // in bytes
+  fileUrl: text("file_url").notNull(), // storage path/URL
+  format: varchar("format", { length: 10 }).notNull().default("wav"), // wav, mp3, ogg
+  sampleRate: integer("sample_rate").default(44100),
+  channels: integer("channels").default(2),
+  effectChain: jsonb("effect_chain"), // snapshot of effects used during recording
+  settings: jsonb("settings"), // input/output gain, etc.
+  isPublic: boolean("is_public").notNull().default(false),
+  shareToken: varchar("share_token").unique(), // for sharing private recordings via link
+  playCount: integer("play_count").default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Support tickets for user inquiries
+export const supportTickets = pgTable("support_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  email: text("email").notNull(),
+  name: text("name"),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 20 }).default("open"), // open, in_progress, resolved, closed
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -153,3 +187,38 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type UserPreset = typeof userPresets.$inferSelect;
 export type InsertPreset = z.infer<typeof insertPresetSchema>;
 export type UpdatePreset = z.infer<typeof updatePresetSchema>;
+
+// Zod schemas for recordings
+export const insertRecordingSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).optional(),
+  duration: z.number().int().positive(),
+  fileSize: z.number().int().positive(),
+  fileUrl: z.string(),
+  format: z.enum(["wav", "mp3", "ogg"]).default("wav"),
+  sampleRate: z.number().int().positive().default(44100),
+  channels: z.number().int().min(1).max(8).default(2),
+  effectChain: z.array(z.any()).optional(),
+  settings: z.record(z.any()).optional(),
+  isPublic: z.boolean().default(false),
+});
+
+export const updateRecordingSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(1000).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+// Zod schemas for support tickets
+export const insertSupportTicketSchema = z.object({
+  email: z.string().email(),
+  name: z.string().max(100).optional(),
+  subject: z.string().min(1).max(200),
+  message: z.string().min(10).max(5000),
+});
+
+export type Recording = typeof recordings.$inferSelect;
+export type InsertRecording = z.infer<typeof insertRecordingSchema>;
+export type UpdateRecording = z.infer<typeof updateRecordingSchema>;
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;

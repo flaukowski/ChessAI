@@ -491,6 +491,13 @@ export class PedalboardEngine {
   }
 
   /**
+   * Get output gain node for recording
+   */
+  get outputNode(): GainNode | null {
+    return this.outputGainNode;
+  }
+
+  /**
    * Subscribe to state changes
    */
   onStateChange(callback: StateChangeCallback): () => void {

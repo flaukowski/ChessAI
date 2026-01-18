@@ -11,6 +11,9 @@ import NotFound from "@/pages/not-found";
 const Studio = lazy(() => import("@/pages/studio"));
 const VerifyEmail = lazy(() => import("@/pages/verify-email"));
 const ResetPassword = lazy(() => import("@/pages/reset-password"));
+const Privacy = lazy(() => import("@/pages/privacy"));
+const Terms = lazy(() => import("@/pages/terms"));
+const Support = lazy(() => import("@/pages/support"));
 
 // Loading fallback component
 function PageLoader() {
@@ -26,13 +29,18 @@ function PageLoader() {
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Landing} />
-      <Route path="/studio" component={Studio} />
-      <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/reset-password" component={ResetPassword} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route path="/studio" component={Studio} />
+        <Route path="/verify-email" component={VerifyEmail} />
+        <Route path="/reset-password" component={ResetPassword} />
+        <Route path="/privacy" component={Privacy} />
+        <Route path="/terms" component={Terms} />
+        <Route path="/support" component={Support} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

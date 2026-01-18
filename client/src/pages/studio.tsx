@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, Home, LogOut, Headphones, Waves, ChevronLeft, Download, FileAudio, Loader2 } from 'lucide-react';
+import { Volume2, Home, LogOut, Headphones, Waves, ChevronLeft, Download, FileAudio, Loader2, Music, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +20,9 @@ import { AIEffectSuggester, type EffectType } from '@/components/ai-effect-sugge
 import { AudioAdapterPanel } from '@/components/audio-adapter-panel';
 import { AudioRoutingMatrix } from '@/components/audio-routing-matrix';
 import { MobileNav, MobileHeader } from '@/components/mobile-nav';
+import { RecordingControls } from '@/components/recording-controls';
+import { RecordingsLibrary } from '@/components/recordings-library';
+import { CommunityRecordings } from '@/components/community-recordings';
 
 import { usePedalboard, type WorkletEffectType } from '@/hooks/use-pedalboard';
 import { useAudioAdapter } from '@/hooks/use-audio-adapter';
@@ -42,10 +45,10 @@ import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_17682613
 export default function Studio() {
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const { user, isAuthenticated, logout } = useSpaceChildAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useSpaceChildAuth();
   const isMobile = useIsMobile();
 
-  const [activeView, setActiveView] = useState<'dsp' | 'routing'>('dsp');
+  const [activeView, setActiveView] = useState<'dsp' | 'routing' | 'recordings'>('dsp');
   const [menuOpen, setMenuOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
@@ -57,6 +60,7 @@ export default function Studio() {
 
   const audioFileRef = useRef<File | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const audioInputRef = useRef<{ loadFromUrl: (url: string, title: string) => void } | null>(null);
 
   const {
     isInitialized,
@@ -84,6 +88,7 @@ export default function Studio() {
     importPreset,
     analyser,
     audioContext,
+    outputNode,
   } = usePedalboard();
 
   // Initialize default presets on first load
@@ -202,6 +207,31 @@ export default function Studio() {
     });
   }, [handleAISuggestion]);
 
+  // Handler for loading recordings from the library
+  const handleLoadRecording = useCallback(async (recordingUrl: string, title: string) => {
+    try {
+      // Fetch the recording audio file
+      const response = await fetch(recordingUrl);
+      if (!response.ok) throw new Error('Failed to fetch recording');
+
+      const blob = await response.blob();
+      const file = new File([blob], `${title}.${blob.type.split('/')[1] || 'wav'}`, { type: blob.type });
+
+      // Use the audioInputRef to load the file if available
+      if (audioInputRef.current?.loadFromUrl) {
+        audioInputRef.current.loadFromUrl(recordingUrl, title);
+      } else {
+        // Fallback: Create object URL and load manually
+        const objectUrl = URL.createObjectURL(blob);
+        // Store the file and buffer for export
+        audioFileRef.current = file;
+        audioBufferRef.current = await loadAudioFile(file);
+      }
+    } catch (error) {
+      console.error('Failed to load recording:', error);
+    }
+  }, []);
+
   const {
     devices,
     inputChannels,
@@ -291,6 +321,16 @@ export default function Studio() {
         onApplySuggestion={handleAISuggestion}
         onApplyChain={handleAIChainSuggestion}
         currentGenre="guitar-clean"
+      />
+
+      {/* Recording Controls */}
+      <RecordingControls
+        audioContext={audioContext}
+        outputNode={outputNode}
+        effectChain={effects}
+        inputGain={inputGain}
+        outputGain={outputGain}
+        isAuthenticated={isAuthenticated}
       />
 
       {/* Export Button */}
@@ -451,6 +491,17 @@ export default function Studio() {
     </div>
   );
 
+  const renderRecordingsView = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      <RecordingsLibrary
+        onLoadRecording={handleLoadRecording}
+      />
+      <CommunityRecordings
+        onLoadRecording={handleLoadRecording}
+      />
+    </div>
+  );
+
   const renderRoutingView = () => (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
       <AudioAdapterPanel
@@ -482,6 +533,23 @@ export default function Studio() {
       />
     </div>
   );
+
+  // Show loading state while auth is being verified
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          >
+            <Loader2 className="w-12 h-12 text-cyan-500" />
+          </motion.div>
+          <p className="text-muted-foreground">Loading AudioNoise Studio...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isMobile) {
     return (
@@ -537,7 +605,9 @@ export default function Studio() {
               exit={{ opacity: 0, x: activeView === 'dsp' ? 20 : -20 }}
               transition={{ duration: 0.2 }}
             >
-              {activeView === 'dsp' ? renderDSPView() : renderRoutingView()}
+              {activeView === 'dsp' && renderDSPView()}
+              {activeView === 'routing' && renderRoutingView()}
+              {activeView === 'recordings' && renderRecordingsView()}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -545,6 +615,7 @@ export default function Studio() {
         <MobileNav
           activeView={activeView}
           onViewChange={setActiveView}
+          isAuthenticated={isAuthenticated}
         />
       </div>
     );
@@ -594,7 +665,7 @@ export default function Studio() {
 
       <main className="container mx-auto p-6">
         <Tabs defaultValue="dsp" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-xl grid-cols-3">
             <TabsTrigger value="dsp" className="flex items-center gap-2" data-testid="tab-dsp">
               <Waves className="w-4 h-4" />
               DSP Effects
@@ -603,6 +674,12 @@ export default function Studio() {
               <Headphones className="w-4 h-4" />
               Audio Routing
             </TabsTrigger>
+            {isAuthenticated && (
+              <TabsTrigger value="recordings" className="flex items-center gap-2" data-testid="tab-recordings">
+                <Music className="w-4 h-4" />
+                Recordings
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="dsp" className="space-y-6">
@@ -612,6 +689,12 @@ export default function Studio() {
           <TabsContent value="routing" className="space-y-6">
             {renderRoutingView()}
           </TabsContent>
+
+          {isAuthenticated && (
+            <TabsContent value="recordings" className="space-y-6">
+              {renderRecordingsView()}
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

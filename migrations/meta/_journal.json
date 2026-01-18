@@ -8,6 +8,13 @@
       "when": 1768627252640,
       "tag": "0000_brave_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1768709542811,
+      "tag": "0001_sturdy_sabra",
+      "breakpoints": true
     }
   ]
 }

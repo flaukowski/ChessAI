@@ -8,6 +8,8 @@ import {
   loginAttempts,
   auditLogs,
   userPresets,
+  recordings,
+  supportTickets,
   type User,
   type InsertUser,
   type UserAISettings,
@@ -22,10 +24,15 @@ import {
   type UserPreset,
   type InsertPreset,
   type UpdatePreset,
+  type Recording,
+  type InsertRecording,
+  type UpdateRecording,
+  type SupportTicket,
+  type InsertSupportTicket,
 } from "@shared/schema";
 import { db } from "./db";
 import { nanoid } from "nanoid";
-import { eq, and, gt, lt } from "drizzle-orm";
+import { eq, and, gt, lt, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -96,6 +103,22 @@ export interface IStorage {
   deletePreset(id: string, userId: string): Promise<boolean>;
   getPublicPresets(limit?: number, offset?: number): Promise<UserPreset[]>;
   getPresetByShareToken(shareToken: string): Promise<UserPreset | undefined>;
+
+  // Recordings
+  createRecording(userId: string, recording: InsertRecording): Promise<Recording>;
+  getRecording(id: string): Promise<Recording | undefined>;
+  getUserRecordings(userId: string): Promise<Recording[]>;
+  getPublicRecordings(limit?: number, offset?: number): Promise<Recording[]>;
+  updateRecording(id: string, userId: string, updates: UpdateRecording): Promise<Recording | undefined>;
+  deleteRecording(id: string, userId: string): Promise<boolean>;
+  toggleRecordingPublic(id: string, userId: string): Promise<Recording | undefined>;
+  getRecordingByShareToken(shareToken: string): Promise<Recording | undefined>;
+  incrementPlayCount(id: string): Promise<void>;
+
+  // Support tickets
+  createSupportTicket(ticket: InsertSupportTicket, userId?: string): Promise<SupportTicket>;
+  getSupportTicket(id: string): Promise<SupportTicket | undefined>;
+  getUserSupportTickets(userId: string): Promise<SupportTicket[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -422,6 +445,124 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userPresets.shareToken, shareToken));
     return preset || undefined;
   }
+
+  // Recordings
+  async createRecording(userId: string, recording: InsertRecording): Promise<Recording> {
+    const shareToken = nanoid(16);
+    const [newRecording] = await db
+      .insert(recordings)
+      .values({
+        userId,
+        title: recording.title,
+        description: recording.description || null,
+        duration: recording.duration,
+        fileSize: recording.fileSize,
+        fileUrl: recording.fileUrl,
+        format: recording.format || "wav",
+        sampleRate: recording.sampleRate || 44100,
+        channels: recording.channels || 2,
+        effectChain: recording.effectChain || null,
+        settings: recording.settings || null,
+        isPublic: recording.isPublic || false,
+        shareToken,
+      })
+      .returning();
+    return newRecording;
+  }
+
+  async getRecording(id: string): Promise<Recording | undefined> {
+    const [recording] = await db.select().from(recordings).where(eq(recordings.id, id));
+    return recording || undefined;
+  }
+
+  async getUserRecordings(userId: string): Promise<Recording[]> {
+    return db
+      .select()
+      .from(recordings)
+      .where(eq(recordings.userId, userId))
+      .orderBy(desc(recordings.createdAt));
+  }
+
+  async getPublicRecordings(limit: number = 50, offset: number = 0): Promise<Recording[]> {
+    return db
+      .select()
+      .from(recordings)
+      .where(eq(recordings.isPublic, true))
+      .orderBy(desc(recordings.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async updateRecording(id: string, userId: string, updates: UpdateRecording): Promise<Recording | undefined> {
+    const [updated] = await db
+      .update(recordings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(recordings.id, id), eq(recordings.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteRecording(id: string, userId: string): Promise<boolean> {
+    await db
+      .delete(recordings)
+      .where(and(eq(recordings.id, id), eq(recordings.userId, userId)));
+    return true;
+  }
+
+  async toggleRecordingPublic(id: string, userId: string): Promise<Recording | undefined> {
+    const recording = await this.getRecording(id);
+    if (!recording || recording.userId !== userId) return undefined;
+
+    const [updated] = await db
+      .update(recordings)
+      .set({ isPublic: !recording.isPublic, updatedAt: new Date() })
+      .where(and(eq(recordings.id, id), eq(recordings.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getRecordingByShareToken(shareToken: string): Promise<Recording | undefined> {
+    const [recording] = await db
+      .select()
+      .from(recordings)
+      .where(eq(recordings.shareToken, shareToken));
+    return recording || undefined;
+  }
+
+  async incrementPlayCount(id: string): Promise<void> {
+    await db
+      .update(recordings)
+      .set({ playCount: sql`${recordings.playCount} + 1` })
+      .where(eq(recordings.id, id));
+  }
+
+  // Support tickets
+  async createSupportTicket(ticket: InsertSupportTicket, userId?: string): Promise<SupportTicket> {
+    const [newTicket] = await db
+      .insert(supportTickets)
+      .values({
+        userId: userId || null,
+        email: ticket.email,
+        name: ticket.name || null,
+        subject: ticket.subject,
+        message: ticket.message,
+      })
+      .returning();
+    return newTicket;
+  }
+
+  async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
+    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    return ticket || undefined;
+  }
+
+  async getUserSupportTickets(userId: string): Promise<SupportTicket[]> {
+    return db
+      .select()
+      .from(supportTickets)
+      .where(eq(supportTickets.userId, userId))
+      .orderBy(desc(supportTickets.createdAt));
+  }
 }
 
 class InMemoryStorage implements IStorage {
@@ -434,6 +575,8 @@ class InMemoryStorage implements IStorage {
   private loginAttempts: LoginAttempt[] = [];
   private auditLogs: AuditLog[] = [];
   private presets: UserPreset[] = [];
+  private recordingsStore: Recording[] = [];
+  private supportTicketsStore: SupportTicket[] = [];
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.find(u => u.id === id);
@@ -690,6 +833,108 @@ class InMemoryStorage implements IStorage {
 
   async getPresetByShareToken(shareToken: string): Promise<UserPreset | undefined> {
     return this.presets.find(p => p.shareToken === shareToken);
+  }
+
+  // Recordings
+  async createRecording(userId: string, recording: InsertRecording): Promise<Recording> {
+    const r: Recording = {
+      id: nanoid(),
+      userId,
+      title: recording.title,
+      description: recording.description || null,
+      duration: recording.duration,
+      fileSize: recording.fileSize,
+      fileUrl: recording.fileUrl,
+      format: recording.format || "wav",
+      sampleRate: recording.sampleRate || 44100,
+      channels: recording.channels || 2,
+      effectChain: recording.effectChain || null,
+      settings: recording.settings || null,
+      isPublic: recording.isPublic || false,
+      shareToken: nanoid(16),
+      playCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.recordingsStore.push(r);
+    return r;
+  }
+
+  async getRecording(id: string): Promise<Recording | undefined> {
+    return this.recordingsStore.find(r => r.id === id);
+  }
+
+  async getUserRecordings(userId: string): Promise<Recording[]> {
+    return this.recordingsStore
+      .filter(r => r.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getPublicRecordings(limit: number = 50, offset: number = 0): Promise<Recording[]> {
+    return this.recordingsStore
+      .filter(r => r.isPublic)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(offset, offset + limit);
+  }
+
+  async updateRecording(id: string, userId: string, updates: UpdateRecording): Promise<Recording | undefined> {
+    const idx = this.recordingsStore.findIndex(r => r.id === id && r.userId === userId);
+    if (idx === -1) return undefined;
+    this.recordingsStore[idx] = { ...this.recordingsStore[idx], ...updates, updatedAt: new Date() };
+    return this.recordingsStore[idx];
+  }
+
+  async deleteRecording(id: string, userId: string): Promise<boolean> {
+    const idx = this.recordingsStore.findIndex(r => r.id === id && r.userId === userId);
+    if (idx === -1) return false;
+    this.recordingsStore.splice(idx, 1);
+    return true;
+  }
+
+  async toggleRecordingPublic(id: string, userId: string): Promise<Recording | undefined> {
+    const idx = this.recordingsStore.findIndex(r => r.id === id && r.userId === userId);
+    if (idx === -1) return undefined;
+    this.recordingsStore[idx].isPublic = !this.recordingsStore[idx].isPublic;
+    this.recordingsStore[idx].updatedAt = new Date();
+    return this.recordingsStore[idx];
+  }
+
+  async getRecordingByShareToken(shareToken: string): Promise<Recording | undefined> {
+    return this.recordingsStore.find(r => r.shareToken === shareToken);
+  }
+
+  async incrementPlayCount(id: string): Promise<void> {
+    const recording = this.recordingsStore.find(r => r.id === id);
+    if (recording) {
+      recording.playCount = (recording.playCount || 0) + 1;
+    }
+  }
+
+  // Support tickets
+  async createSupportTicket(ticket: InsertSupportTicket, userId?: string): Promise<SupportTicket> {
+    const t: SupportTicket = {
+      id: nanoid(),
+      userId: userId || null,
+      email: ticket.email,
+      name: ticket.name || null,
+      subject: ticket.subject,
+      message: ticket.message,
+      status: "open",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.supportTicketsStore.push(t);
+    return t;
+  }
+
+  async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
+    return this.supportTicketsStore.find(t => t.id === id);
+  }
+
+  async getUserSupportTickets(userId: string): Promise<SupportTicket[]> {
+    return this.supportTicketsStore
+      .filter(t => t.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 }
 

@@ -46,6 +46,7 @@ export interface UsePedalboardReturn {
   // Audio context
   audioContext: AudioContext | null;
   analyser: AnalyserNode | null;
+  outputNode: GainNode | null;
 }
 
 export function usePedalboard(): UsePedalboardReturn {
@@ -193,5 +194,6 @@ export function usePedalboard(): UsePedalboardReturn {
     // Audio context
     audioContext: pedalboardEngine.audioContext,
     analyser: pedalboardEngine.analyser,
+    outputNode: pedalboardEngine.outputNode,
   };
 }

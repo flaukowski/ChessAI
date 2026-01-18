@@ -5,32 +5,38 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Music, Waves, Bluetooth, Clock, Sparkles, 
-  PenTool, Menu, X, Home
+import {
+  Music, Waves, Bluetooth, Clock, Sparkles,
+  PenTool, Menu, X, Home, Library
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface MobileNavProps {
-  activeView: 'dsp' | 'routing';
-  onViewChange: (view: 'dsp' | 'routing') => void;
+  activeView: 'dsp' | 'routing' | 'recordings';
+  onViewChange: (view: 'dsp' | 'routing' | 'recordings') => void;
   onOpenPrompt?: () => void;
   onOpenHistory?: () => void;
   isGenerating?: boolean;
+  isAuthenticated?: boolean;
 }
 
-export function MobileNav({ 
-  activeView, 
-  onViewChange, 
+export function MobileNav({
+  activeView,
+  onViewChange,
   onOpenPrompt,
   onOpenHistory,
-  isGenerating = false 
+  isGenerating = false,
+  isAuthenticated = false,
 }: MobileNavProps) {
-  const tabs = [
+  const baseTabs = [
     { id: 'dsp' as const, label: 'Effects', icon: Waves },
     { id: 'routing' as const, label: 'Channels', icon: Bluetooth },
   ];
+
+  const tabs = isAuthenticated
+    ? [...baseTabs, { id: 'recordings' as const, label: 'Recordings', icon: Library }]
+    : baseTabs;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-area-bottom">
