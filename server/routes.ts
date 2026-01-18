@@ -6,6 +6,7 @@ import authRoutes from "./auth";
 import presetsRoutes from "./presets";
 import recordingsRoutes from "./recordings";
 import supportRoutes from "./support";
+import aiEffectsRoutes from "./ai-effects";
 import express from "express";
 import path from "path";
 
@@ -20,6 +21,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/v1/presets", presetsRoutes);
   app.use("/api/v1/recordings", recordingsRoutes);
   app.use("/api/v1/support", supportRoutes);
+  app.use("/api/v1/ai-effects", aiEffectsRoutes);
   
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });

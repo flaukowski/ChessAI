@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, jsonb, boolean, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, boolean, timestamp, integer, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Re-export chat models for integration
+export * from "./models/chat";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -222,3 +225,51 @@ export type InsertRecording = z.infer<typeof insertRecordingSchema>;
 export type UpdateRecording = z.infer<typeof updateRecordingSchema>;
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// AI Effect Conversations - stores chat history for effect suggestions
+export const aiEffectConversations = pgTable("ai_effect_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  title: text("title").default("New Effect Chat"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// AI Effect Messages - individual messages in effect conversations
+export const aiEffectMessages = pgTable("ai_effect_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").references(() => aiEffectConversations.id).notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  effectSuggestions: jsonb("effect_suggestions"), // Array of suggested effects with params
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// User Sound Preferences - learned from conversations to personalize suggestions
+export const userSoundPreferences = pgTable("user_sound_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  preferredGenres: text("preferred_genres").array(),
+  preferredEffects: text("preferred_effects").array(),
+  toneDescriptors: text("tone_descriptors").array(), // e.g., "warm", "bright", "vintage"
+  recentEffectChains: jsonb("recent_effect_chains"), // Most used effect combinations
+  notes: text("notes"), // AI-generated summary of user's style
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertAIEffectConversationSchema = createInsertSchema(aiEffectConversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAIEffectMessageSchema = createInsertSchema(aiEffectMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AIEffectConversation = typeof aiEffectConversations.$inferSelect;
+export type InsertAIEffectConversation = z.infer<typeof insertAIEffectConversationSchema>;
+export type AIEffectMessage = typeof aiEffectMessages.$inferSelect;
+export type InsertAIEffectMessage = z.infer<typeof insertAIEffectMessageSchema>;
+export type UserSoundPreferences = typeof userSoundPreferences.$inferSelect;
