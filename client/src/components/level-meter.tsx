@@ -3,8 +3,12 @@
  * Displays peak and RMS audio levels with professional styling
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { cn } from '@/lib/utils';
+
+// Pre-cached gradients to avoid recreation on every render
+const VERTICAL_GRADIENT = 'linear-gradient(to top, #22c55e 0%, #22c55e 60%, #eab308 60%, #eab308 85%, #ef4444 85%, #ef4444 100%)';
+const HORIZONTAL_GRADIENT = 'linear-gradient(to right, #22c55e 0%, #22c55e 60%, #eab308 60%, #eab308 85%, #ef4444 85%, #ef4444 100%)';
 
 export interface LevelMeterProps {
   peakL: number;
@@ -35,16 +39,17 @@ interface MeterBarProps {
   showPeak: boolean;
 }
 
-function MeterBar({ level, peak, orientation, showPeak }: MeterBarProps) {
+// Memoized MeterBar - prevents re-renders when parent updates but props are same
+const MeterBar = memo(function MeterBar({ level, peak, orientation, showPeak }: MeterBarProps) {
   const levelPercent = Math.min(100, level * 100);
   const peakPercent = Math.min(100, peak * 100);
 
-  // Color gradient based on level
+  // Color gradient based on level - cached as module constant
   const getGradient = () => {
     if (orientation === 'vertical') {
-      return 'linear-gradient(to top, #22c55e 0%, #22c55e 60%, #eab308 60%, #eab308 85%, #ef4444 85%, #ef4444 100%)';
+      return VERTICAL_GRADIENT;
     }
-    return 'linear-gradient(to right, #22c55e 0%, #22c55e 60%, #eab308 60%, #eab308 85%, #ef4444 85%, #ef4444 100%)';
+    return HORIZONTAL_GRADIENT;
   };
 
   if (orientation === 'vertical') {
@@ -96,7 +101,7 @@ function MeterBar({ level, peak, orientation, showPeak }: MeterBarProps) {
       )}
     </div>
   );
-}
+});
 
 export function LevelMeter({
   peakL,

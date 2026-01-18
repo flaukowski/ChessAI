@@ -3,7 +3,7 @@
  * Full-featured audio effects pedalboard with drag-and-drop, presets, and export
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, memo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -218,7 +218,7 @@ interface SortableEffectCardProps {
   onParamChange: (param: string, value: number) => void;
 }
 
-function SortableEffectCard({
+const SortableEffectCard = memo(function SortableEffectCard({
   effect,
   config,
   onRemove,
@@ -397,7 +397,7 @@ function SortableEffectCard({
       )}
     </Card>
   );
-}
+});
 
 // Main Pedalboard Props
 interface PedalboardProps {

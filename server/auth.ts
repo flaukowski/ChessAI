@@ -38,10 +38,25 @@ const LOCKOUT_DURATION_MS = securityConfig.lockoutDurationMs;
 const RATE_LIMIT_WINDOW_MS = securityConfig.rateLimitWindowMs;
 const RATE_LIMIT_MAX_REQUESTS = securityConfig.rateLimitMaxRequests;
 
-// In-memory stores
+// In-memory stores with max size limits to prevent unbounded growth
+const MAX_ACCESS_TOKENS = 10000; // Max concurrent sessions
+const MAX_RATE_LIMIT_ENTRIES = 5000;
 const accessTokenStore = new Map<string, { userId: string; expiresAt: Date }>();
 const rateLimitStore = new Map<string, { count: number; resetAt: Date }>();
 const emailRateLimitStore = new Map<string, { count: number; resetAt: Date }>();
+
+// Evict oldest entries when store reaches max size (LRU-style)
+const evictOldestIfNeeded = <K, V>(store: Map<K, V>, maxSize: number): void => {
+  if (store.size >= maxSize) {
+    // Delete first 10% of entries (oldest, since Map maintains insertion order)
+    const deleteCount = Math.floor(maxSize * 0.1);
+    const iterator = store.keys();
+    for (let i = 0; i < deleteCount; i++) {
+      const key = iterator.next().value;
+      if (key !== undefined) store.delete(key);
+    }
+  }
+};
 
 // Per-email rate limiting configuration
 const EMAIL_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -76,6 +91,8 @@ const createTokenPair = async (userId: string) => {
   const accessExpiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_MS);
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
 
+  // Evict old tokens if we're at capacity
+  evictOldestIfNeeded(accessTokenStore, MAX_ACCESS_TOKENS);
   accessTokenStore.set(accessToken, { userId, expiresAt: accessExpiresAt });
   await storage.createRefreshToken(userId, refreshToken, refreshExpiresAt);
 

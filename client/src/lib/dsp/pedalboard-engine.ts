@@ -84,7 +84,7 @@ export class PedalboardEngine {
   private mediaElementSource: MediaElementAudioSourceNode | null = null;
   private lastConnectedElement: HTMLAudioElement | null = null;
   private lastLevelsNotify: number = 0;
-  private levelsThrottleMs: number = 50; // Throttle level updates to max 20fps
+  private levelsThrottleMs: number = 100; // Throttle level updates to 10fps (sufficient for visualization)
 
   /**
    * Initialize the audio context and load worklets
@@ -382,16 +382,18 @@ export class PedalboardEngine {
 
   /**
    * Toggle an effect's enabled state
+   * Note: No graph rebuild needed - bypass is handled by the effect node itself
    */
   toggleEffect(id: string): void {
     const effectData = this.effects.get(id);
     if (!effectData) return;
 
     effectData.effect.enabled = !effectData.effect.enabled;
+    // setBypass handles routing internally, no need to rebuild entire graph
     effectData.node.setBypass(!effectData.effect.enabled);
 
     this.state.effects = this.getEffectsList();
-    this.rebuildAudioGraph();
+    // Removed rebuildAudioGraph() - unnecessary, causes audio glitches
     this.notifyStateChange();
   }
 
