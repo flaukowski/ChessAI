@@ -14,9 +14,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve uploaded recordings
   app.use("/uploads/recordings", express.static(path.join(process.cwd(), "uploads", "recordings")));
 
-  // Larger body size limit for recording uploads (audio data can be large)
-  app.use("/api/v1/recordings/upload", express.json({ limit: "50mb" }));
-
   // Auth routes (Space Child Auth integration)
   app.use("/api/space-child-auth", authRoutes);
 

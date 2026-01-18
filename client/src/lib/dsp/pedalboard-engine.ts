@@ -83,6 +83,8 @@ export class PedalboardEngine {
   private mediaStream: MediaStream | null = null;
   private mediaElementSource: MediaElementAudioSourceNode | null = null;
   private lastConnectedElement: HTMLAudioElement | null = null;
+  private lastLevelsNotify: number = 0;
+  private levelsThrottleMs: number = 50; // Throttle level updates to max 20fps
 
   /**
    * Initialize the audio context and load worklets
@@ -536,9 +538,14 @@ export class PedalboardEngine {
   }
 
   /**
-   * Notify levels change callbacks
+   * Notify levels change callbacks (throttled to prevent performance issues)
    */
   private notifyLevelsChange(): void {
+    const now = performance.now();
+    if (now - this.lastLevelsNotify < this.levelsThrottleMs) {
+      return; // Skip this update, too soon
+    }
+    this.lastLevelsNotify = now;
     this.levelsCallbacks.forEach((cb) => cb(this.state.levels));
   }
 

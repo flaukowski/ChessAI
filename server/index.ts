@@ -143,7 +143,17 @@ declare module 'http' {
 
 // Limit request body sizes to prevent DoS attacks
 const REQUEST_SIZE_LIMIT = '1mb';
+const UPLOAD_SIZE_LIMIT = '50mb'; // Larger limit for audio uploads
 
+// Apply larger body limit for recording uploads FIRST (before general limit)
+app.use('/api/v1/recordings/upload', express.json({
+  limit: UPLOAD_SIZE_LIMIT,
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+
+// General body parser with stricter limit for all other routes
 app.use(express.json({
   limit: REQUEST_SIZE_LIMIT,
   verify: (req, _res, buf) => {

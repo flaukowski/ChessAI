@@ -659,7 +659,7 @@ class LevelMeterProcessor extends AudioWorkletProcessor {
     this.peakDecay = 0.9995;
     this.rmsSmoothing = 0.95;
     this.frameCount = 0;
-    this.reportInterval = 128; // Report every N frames
+    this.reportInterval = 2048; // Report every ~42ms at 48kHz (was 128 = ~2.7ms, causing perf issues)
   }
 
   process(inputs, outputs, parameters) {

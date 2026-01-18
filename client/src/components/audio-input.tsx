@@ -243,6 +243,15 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
           <p className="text-xs text-destructive">{micError}</p>
         )}
 
+        {/* Feedback Warning for Microphone */}
+        {inputSource === 'microphone' && (
+          <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
+            <p className="text-xs text-amber-500">
+              <strong>Feedback Warning:</strong> Use headphones to avoid audio feedback when using the microphone with speakers. The processed audio is playing through your output device.
+            </p>
+          </div>
+        )}
+
         {/* Volume Control */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
