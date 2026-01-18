@@ -551,6 +551,9 @@ export default function Studio() {
         bandwidthWarning={bandwidthWarning}
         latencyWarning={latencyWarning}
         presets={getPresets()}
+        globalOutputMute={false}
+        globalInputMute={false}
+        disabledDevices={[]}
         onScanDevices={scanDevices}
         onCreateInputChannel={createInputChannel}
         onCreateOutputChannel={createOutputChannel}
