@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 
-import { AudioInput } from '@/components/audio-input';
+import { AudioInput, type AudioInputRef } from '@/components/audio-input';
 import { AudioVisualizer } from '@/components/audio-visualizer';
 import { Pedalboard } from '@/components/pedalboard';
 import { AIEffectSuggester, type EffectType } from '@/components/ai-effect-suggester';
@@ -61,7 +61,7 @@ export default function Studio() {
 
   const audioFileRef = useRef<File | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const audioInputRef = useRef<{ loadFromUrl: (url: string, title: string) => void } | null>(null);
+  const audioInputRef = useRef<AudioInputRef>(null);
 
   const {
     isInitialized,
@@ -224,9 +224,13 @@ export default function Studio() {
       'compressor': 'compressor',
       'reverb': 'reverb',
       'basspurr': 'basspurr',
+      'tremolo': 'tremolo',
     };
 
-    const newType = typeMap[type] || 'eq';
+    // Normalize the type to lowercase for matching
+    const normalizedType = type.toLowerCase().trim();
+    const newType = typeMap[normalizedType] || 'eq';
+    console.log(`[AI Effect] Applying effect: ${type} -> ${normalizedType} -> ${newType}`);
     const id = addEffect(newType);
 
     if (id) {
@@ -245,22 +249,14 @@ export default function Studio() {
   // Handler for loading recordings from the library
   const handleLoadRecording = useCallback(async (recordingUrl: string, title: string) => {
     try {
-      // Fetch the recording audio file
-      const response = await fetch(recordingUrl);
-      if (!response.ok) throw new Error('Failed to fetch recording');
+      // Switch to DSP view to show the audio input
+      setActiveView('dsp');
 
-      const blob = await response.blob();
-      const file = new File([blob], `${title}.${blob.type.split('/')[1] || 'wav'}`, { type: blob.type });
-
-      // Use the audioInputRef to load the file if available
-      if (audioInputRef.current?.loadFromUrl) {
-        audioInputRef.current.loadFromUrl(recordingUrl, title);
+      // Use the audioInputRef to load the file from URL
+      if (audioInputRef.current) {
+        await audioInputRef.current.loadFromUrl(recordingUrl, title);
       } else {
-        // Fallback: Create object URL and load manually
-        const objectUrl = URL.createObjectURL(blob);
-        // Store the file and buffer for export
-        audioFileRef.current = file;
-        audioBufferRef.current = await loadAudioFile(file);
+        console.error('AudioInput ref not available');
       }
     } catch (error) {
       console.error('Failed to load recording:', error);
@@ -311,6 +307,7 @@ export default function Studio() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         <div className="lg:col-span-1">
           <AudioInput
+            ref={audioInputRef}
             onAudioElementReady={connectAudioFile}
             onMicrophoneConnect={connectMicrophone}
             onMicrophoneDisconnect={disconnectMicrophone}
@@ -373,6 +370,7 @@ export default function Studio() {
         inputGain={inputGain}
         outputGain={outputGain}
         isAuthenticated={isAuthenticated}
+        onNavigateToLibrary={() => setActiveView('recordings')}
       />
 
       {/* Export Button */}

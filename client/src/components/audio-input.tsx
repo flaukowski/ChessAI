@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,11 @@ interface AudioInputProps {
   className?: string;
 }
 
-export function AudioInput({
+export interface AudioInputRef {
+  loadFromUrl: (url: string, title: string) => Promise<void>;
+}
+
+export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function AudioInput({
   onAudioElementReady,
   onMicrophoneConnect,
   onMicrophoneDisconnect,
@@ -27,7 +31,7 @@ export function AudioInput({
   volume,
   onVolumeChange,
   className,
-}: AudioInputProps) {
+}, ref) {
   const [loadedFile, setLoadedFile] = useState<File | null>(null);
   const [isConnectingMic, setIsConnectingMic] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
@@ -109,6 +113,39 @@ export function AudioInput({
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
   }, []);
+
+  // Load audio from URL (for loading community recordings)
+  const loadFromUrl = useCallback(async (url: string, title: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch audio');
+
+      const blob = await response.blob();
+      const extension = blob.type.split('/')[1] || 'wav';
+      const file = new File([blob], `${title}.${extension}`, { type: blob.type });
+
+      setLoadedFile(file);
+      setMicError(null);
+
+      // Notify parent about the file
+      onFileLoaded?.(file);
+
+      if (audioRef.current) {
+        const objectUrl = URL.createObjectURL(blob);
+        audioRef.current.src = objectUrl;
+        audioRef.current.load();
+        onAudioElementReady(audioRef.current);
+      }
+    } catch (error) {
+      console.error('Failed to load audio from URL:', error);
+      setMicError('Failed to load recording. Please try again.');
+    }
+  }, [onAudioElementReady, onFileLoaded]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    loadFromUrl,
+  }), [loadFromUrl]);
 
   return (
     <Card className={cn("", className)}>
@@ -245,4 +282,4 @@ export function AudioInput({
       </CardContent>
     </Card>
   );
-}
+});
