@@ -17,6 +17,7 @@ import { AudioInput } from '@/components/audio-input';
 import { AudioVisualizer } from '@/components/audio-visualizer';
 import { Pedalboard } from '@/components/pedalboard';
 import { AIEffectSuggester, type EffectType } from '@/components/ai-effect-suggester';
+import { AIEffectChat, type EffectSuggestion } from '@/components/ai-effect-chat';
 import { AudioAdapterPanel } from '@/components/audio-adapter-panel';
 import { AudioRoutingMatrix } from '@/components/audio-routing-matrix';
 import { MobileNav, MobileHeader } from '@/components/mobile-nav';
@@ -207,6 +208,40 @@ export default function Studio() {
     });
   }, [handleAISuggestion]);
 
+  const handleAIChatSuggestion = useCallback((type: string, params: Record<string, number>) => {
+    const typeMap: Record<string, WorkletEffectType> = {
+      'echo': 'delay',
+      'flanger': 'chorus',
+      'phaser': 'chorus',
+      'lowpass': 'eq',
+      'highpass': 'eq',
+      'bandpass': 'eq',
+      'notch': 'eq',
+      'eq': 'eq',
+      'distortion': 'distortion',
+      'delay': 'delay',
+      'chorus': 'chorus',
+      'compressor': 'compressor',
+      'reverb': 'reverb',
+      'basspurr': 'basspurr',
+    };
+
+    const newType = typeMap[type] || 'eq';
+    const id = addEffect(newType);
+
+    if (id) {
+      Object.entries(params).forEach(([param, value]) => {
+        updateEffectParam(id, param, value);
+      });
+    }
+  }, [addEffect, updateEffectParam]);
+
+  const handleAIChatChainSuggestion = useCallback((suggestions: EffectSuggestion[]) => {
+    suggestions.forEach((suggestion) => {
+      handleAIChatSuggestion(suggestion.type, suggestion.params);
+    });
+  }, [handleAIChatSuggestion]);
+
   // Handler for loading recordings from the library
   const handleLoadRecording = useCallback(async (recordingUrl: string, title: string) => {
     try {
@@ -315,13 +350,20 @@ export default function Studio() {
         onImportPreset={importPreset}
       />
 
-      {/* AI Effect Suggester */}
-      <AIEffectSuggester
-        analyser={analyser}
-        onApplySuggestion={handleAISuggestion}
-        onApplyChain={handleAIChainSuggestion}
-        currentGenre="guitar-clean"
-      />
+      {/* AI Effect Suggestions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        <AIEffectChat
+          onApplySuggestion={handleAIChatSuggestion}
+          onApplyChain={handleAIChatChainSuggestion}
+          className="min-h-[400px]"
+        />
+        <AIEffectSuggester
+          analyser={analyser}
+          onApplySuggestion={handleAISuggestion}
+          onApplyChain={handleAIChainSuggestion}
+          currentGenre="guitar-clean"
+        />
+      </div>
 
       {/* Recording Controls */}
       <RecordingControls
