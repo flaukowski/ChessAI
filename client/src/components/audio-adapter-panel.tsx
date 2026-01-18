@@ -35,6 +35,8 @@ import {
   Disc,
   Waves,
   Cable,
+  Power,
+  PowerOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AdapterAudioChannel, AdapterRoutingConnection } from '@/lib/dsp/audio-adapter-manager';
@@ -76,12 +78,19 @@ interface AudioAdapterPanelProps {
   bandwidthWarning: string | null;
   latencyWarning: string | null;
   presets: InstrumentPreset[];
+  globalOutputMute: boolean;
+  globalInputMute: boolean;
+  disabledDevices: string[];
   onScanDevices: () => void;
   onCreateInputChannel: (deviceId: string, name?: string, presetId?: string) => Promise<AdapterAudioChannel | null>;
   onCreateOutputChannel: (deviceId: string, name?: string) => Promise<AdapterAudioChannel | null>;
   onRemoveChannel: (channelId: string) => void;
   onSetChannelMute: (channelId: string, muted: boolean) => void;
   onApplyPreset?: (channelId: string, presetId: string) => void;
+  onSetGlobalOutputMute?: (muted: boolean) => void;
+  onSetGlobalInputMute?: (muted: boolean) => void;
+  onDisableDevice?: (deviceId: string) => void;
+  onEnableDevice?: (deviceId: string) => void;
   className?: string;
 }
 
@@ -93,12 +102,19 @@ export function AudioAdapterPanel({
   bandwidthWarning,
   latencyWarning,
   presets,
+  globalOutputMute,
+  globalInputMute,
+  disabledDevices,
   onScanDevices,
   onCreateInputChannel,
   onCreateOutputChannel,
   onRemoveChannel,
   onSetChannelMute,
   onApplyPreset,
+  onSetGlobalOutputMute,
+  onSetGlobalInputMute,
+  onDisableDevice,
+  onEnableDevice,
   className,
 }: AudioAdapterPanelProps) {
   const [creatingChannel, setCreatingChannel] = useState<string | null>(null);
@@ -154,6 +170,37 @@ export function AudioAdapterPanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Global Controls for Feedback Prevention */}
+        <div className="flex items-center gap-4 p-3 rounded-md bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Speaker className="w-4 h-4 text-emerald-500" />
+            <span className="text-sm font-medium">Speakers</span>
+            <Button
+              variant={globalOutputMute ? "destructive" : "default"}
+              size="sm"
+              onClick={() => onSetGlobalOutputMute?.(!globalOutputMute)}
+              className="h-7 px-2"
+            >
+              {globalOutputMute ? <VolumeX className="w-3 h-3 mr-1" /> : <Volume2 className="w-3 h-3 mr-1" />}
+              {globalOutputMute ? "Muted" : "On"}
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Mic className="w-4 h-4 text-cyan-500" />
+            <span className="text-sm font-medium">Inputs</span>
+            <Button
+              variant={globalInputMute ? "destructive" : "default"}
+              size="sm"
+              onClick={() => onSetGlobalInputMute?.(!globalInputMute)}
+              className="h-7 px-2"
+            >
+              {globalInputMute ? <VolumeX className="w-3 h-3 mr-1" /> : <Volume2 className="w-3 h-3 mr-1" />}
+              {globalInputMute ? "Muted" : "On"}
+            </Button>
+          </div>
+        </div>
+
         {/* Warnings */}
         {bandwidthWarning && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 text-amber-500 text-xs">
@@ -202,7 +249,10 @@ export function AudioAdapterPanel({
                           device={device}
                           inUse={isDeviceInUse(device.id)}
                           isCreating={creatingChannel === device.id}
+                          isDisabled={disabledDevices.includes(device.id)}
                           onAdd={() => handleCreateChannel(device)}
+                          onDisable={onDisableDevice}
+                          onEnable={onEnableDevice}
                         />
                       ))}
                     </div>
@@ -254,7 +304,10 @@ export function AudioAdapterPanel({
                           device={device}
                           inUse={isDeviceInUse(device.id)}
                           isCreating={creatingChannel === device.id}
+                          isDisabled={disabledDevices.includes(device.id)}
                           onAdd={() => handleCreateChannel(device)}
+                          onDisable={onDisableDevice}
+                          onEnable={onEnableDevice}
                         />
                       ))}
                     </div>
@@ -322,7 +375,11 @@ interface DeviceItemProps {
   onAdd: () => void;
 }
 
-function DeviceItem({ device, inUse, isCreating, onAdd }: DeviceItemProps) {
+function DeviceItem({ device, inUse, isCreating, onAdd, isDisabled, onDisable, onEnable }: DeviceItemProps & { 
+  isDisabled?: boolean; 
+  onDisable?: (deviceId: string) => void; 
+  onEnable?: (deviceId: string) => void; 
+}) {
   const latencyColor = getLatencyColor(device.latencyMs);
   const latencyLabel = getLatencyLabel(device.latencyMs);
 
@@ -359,19 +416,45 @@ function DeviceItem({ device, inUse, isCreating, onAdd }: DeviceItemProps) {
         )}
       </div>
       {inUse ? (
-        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-          In Use
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+            In Use
+          </Badge>
+          {onDisable && onEnable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => isDisabled ? onEnable(device.id) : onDisable(device.id)}
+              title={isDisabled ? "Enable device" : "Disable device"}
+            >
+              {isDisabled ? <Power className="w-3 h-3 text-green-500" /> : <PowerOff className="w-3 h-3 text-red-500" />}
+            </Button>
+          )}
+        </div>
       ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={onAdd}
-          disabled={isCreating}
-        >
-          <Plus className={cn('w-3 h-3', isCreating && 'animate-spin')} />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onDisable && onEnable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => isDisabled ? onEnable(device.id) : onDisable(device.id)}
+              title={isDisabled ? "Enable device" : "Disable device"}
+            >
+              {isDisabled ? <Power className="w-3 h-3 text-green-500" /> : <PowerOff className="w-3 h-3 text-red-500" />}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onAdd}
+            disabled={isCreating || isDisabled}
+          >
+            <Plus className={cn('w-3 h-3', isCreating && 'animate-spin')} />
+          </Button>
+        </div>
       )}
     </div>
   );
