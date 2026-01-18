@@ -113,6 +113,26 @@ app.use(session({
 }));
 
 // =============================================================================
+// PWA CACHE CONTROL - Aggressive no-cache for service worker and manifest
+// =============================================================================
+app.get('/sw.js', (_req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Service-Worker-Allowed': '/'
+  });
+  next();
+});
+
+app.get('/manifest.json', (_req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate'
+  });
+  next();
+});
+
+// =============================================================================
 // REQUEST BODY PARSING WITH SIZE LIMITS
 // =============================================================================
 declare module 'http' {

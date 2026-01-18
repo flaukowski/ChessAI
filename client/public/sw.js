@@ -1,203 +1,172 @@
-// SonicVision PWA - Universal Service Worker
-// Auto-versioned caches that update on each deployment
-const VERSION = new Date().getTime();
-const APP_NAME = 'sonicvision';
-const CACHE_NAME = `${APP_NAME}-${VERSION}`;
-const RUNTIME_CACHE = `${APP_NAME}-runtime-${VERSION}`;
-const IMAGE_CACHE = `${APP_NAME}-images-${VERSION}`;
-const API_CACHE = `${APP_NAME}-api-${VERSION}`;
+// AudioNoise PWA - Aggressive Update Service Worker
+// BUILD_VERSION gets replaced at build time, fallback to timestamp
+const BUILD_VERSION = '__BUILD_VERSION__';
+const VERSION = BUILD_VERSION !== '__BUILD_VERSION__' ? BUILD_VERSION : Date.now().toString();
+const APP_NAME = 'audionoise';
+const CACHE_NAME = `${APP_NAME}-v${VERSION}`;
+const RUNTIME_CACHE = `${APP_NAME}-runtime-v${VERSION}`;
+const IMAGE_CACHE = `${APP_NAME}-images-v${VERSION}`;
+const API_CACHE = `${APP_NAME}-api-v${VERSION}`;
 
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json'
 ];
 
-// Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('🎵 SonicVision SW installing with version:', VERSION);
+  console.log('[SW] Installing version:', VERSION);
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('✅ Cache opened');
-        return cache.addAll(STATIC_ASSETS).catch(err => {
-          console.warn('Some assets failed to cache:', err);
-        });
-      })
+      .then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
-  self.skipWaiting();
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('⚡ SonicVision SW activating with version:', VERSION);
-  const currentCaches = [CACHE_NAME, RUNTIME_CACHE, IMAGE_CACHE, API_CACHE];
+  console.log('[SW] Activating version:', VERSION);
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName.startsWith(APP_NAME) && !currentCaches.includes(cacheName)) {
-            console.log('🗑️ Deleting old cache:', cacheName);
+          if (cacheName.startsWith(APP_NAME) && 
+              cacheName !== CACHE_NAME && 
+              cacheName !== RUNTIME_CACHE && 
+              cacheName !== IMAGE_CACHE && 
+              cacheName !== API_CACHE) {
+            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
+      console.log('[SW] Claiming clients');
       return self.clients.claim();
+    }).then(() => {
+      return self.clients.matchAll({ type: 'window' });
+    }).then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({ type: 'SW_ACTIVATED', version: VERSION });
+      });
     })
   );
 });
 
-// Network-first strategy for API calls
-async function networkFirstStrategy(request) {
+async function networkFirst(request, cacheName = RUNTIME_CACHE) {
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, networkResponse.clone());
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
     }
-    return networkResponse;
+    return response;
   } catch (error) {
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response(
-      JSON.stringify({ error: 'Offline - API unavailable' }),
-      { 
-        headers: { 'Content-Type': 'application/json' },
-        status: 503 
-      }
-    );
+    const cached = await caches.match(request);
+    return cached || new Response('Offline', { status: 503 });
   }
 }
 
-// Cache-first strategy for images
-async function cacheFirstStrategy(request) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
+async function networkOnly(request) {
+  try {
+    return await fetch(request, { cache: 'no-store' });
+  } catch (error) {
+    return new Response('Offline', { status: 503 });
   }
+}
+
+async function cacheFirst(request, cacheName = IMAGE_CACHE) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
   
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(IMAGE_CACHE);
-      cache.put(request, networkResponse.clone());
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
     }
-    return networkResponse;
+    return response;
   } catch (error) {
-    return new Response('Image not available', { status: 503 });
+    return new Response('Not available', { status: 503 });
   }
 }
 
-// Stale-while-revalidate for static assets
-async function staleWhileRevalidate(request) {
-  const cachedResponse = await caches.match(request);
-  
-  const fetchPromise = fetch(request).then((networkResponse) => {
-    if (networkResponse.ok) {
-      caches.open(RUNTIME_CACHE).then((cache) => {
-        cache.put(request, networkResponse.clone());
-      });
-    }
-    return networkResponse;
-  }).catch(() => {
-    return cachedResponse || caches.match('/index.html');
-  });
-  
-  return cachedResponse || fetchPromise;
-}
-
-// Fetch event - intelligent caching strategy
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   
-  if (url.origin !== location.origin) {
-    return;
-  }
+  if (url.origin !== location.origin) return;
+  if (request.method !== 'GET') return;
   
-  if (request.method !== 'GET') {
-    return;
-  }
-  
-  // API requests - network-first
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirstStrategy(request));
+    event.respondWith(networkFirst(request, API_CACHE));
     return;
   }
   
-  // Images - cache-first
-  if (request.destination === 'image' || /\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(url.pathname)) {
-    event.respondWith(cacheFirstStrategy(request));
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
+    event.respondWith(networkFirst(request));
     return;
   }
   
-  // Audio files - cache-first (important for music app)
-  if (request.destination === 'audio' || /\.(mp3|wav|ogg|flac|m4a)$/i.test(url.pathname)) {
-    event.respondWith(cacheFirstStrategy(request));
-    return;
-  }
-  
-  // Navigation requests - network-first with fallback
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
-    );
+    event.respondWith(networkFirst(request));
     return;
   }
   
-  // Static assets - stale-while-revalidate
-  event.respondWith(staleWhileRevalidate(request));
+  if (request.destination === 'image' || /\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+  
+  if (request.destination === 'audio' || /\.(mp3|wav|ogg|flac|m4a)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+  
+  event.respondWith(networkFirst(request));
 });
 
-// Background sync for offline actions
-self.addEventListener('sync', (event) => {
-  console.log('🔄 Background sync triggered:', event.tag);
-  if (event.tag === 'sonicvision-sync') {
-    event.waitUntil(syncOfflineData());
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    console.log('[SW] Skip waiting requested');
+    self.skipWaiting();
+  }
+  
+  if (event.data?.type === 'GET_VERSION') {
+    event.ports[0]?.postMessage({ version: VERSION });
+  }
+  
+  if (event.data?.type === 'CHECK_UPDATE') {
+    self.registration.update().then(() => {
+      console.log('[SW] Update check completed');
+    });
   }
 });
 
-// Push notifications
+self.addEventListener('sync', (event) => {
+  console.log('[SW] Background sync:', event.tag);
+});
+
 self.addEventListener('push', (event) => {
-  let data = { title: 'SonicVision', body: 'New notification' };
-  
+  let data = { title: 'AudioNoise', body: 'New notification' };
   try {
-    if (event.data) {
-      data = event.data.json();
-    }
+    if (event.data) data = event.data.json();
   } catch (e) {
     data.body = event.data?.text() || 'New notification';
   }
 
-  const options = {
-    body: data.body,
-    icon: data.icon || '/favicon.png',
-    badge: data.badge || '/favicon.png',
-    vibrate: [200, 100, 200],
-    data: data.data || { url: '/' },
-    actions: data.actions || [
-      { action: 'open', title: 'Open' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
-  };
-
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      vibrate: [200, 100, 200],
+      data: data.data || { url: '/' }
+    })
   );
 });
 
-// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  
   const url = event.notification.data?.url || '/';
-  
-  if (event.action === 'dismiss') {
-    return;
-  }
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
@@ -207,24 +176,7 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-      if (clients.openWindow) {
-        return clients.openWindow(url);
-      }
+      return clients.openWindow?.(url);
     })
   );
 });
-
-// Listen for messages from the client
-self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-  
-  if (event.data?.type === 'GET_VERSION') {
-    event.ports[0]?.postMessage({ version: VERSION });
-  }
-});
-
-async function syncOfflineData() {
-  console.log('📤 Syncing offline data...');
-}
