@@ -90,6 +90,11 @@ export class BluetoothAudioManager {
   private activeStreams: Set<string> = new Set();
   private streamPriorities: Map<string, number> = new Map();
   private maxConcurrentBtStreams = 3; // Bluetooth bandwidth limit
+  
+  // Global mute states for feedback prevention
+  private globalOutputMute = false;
+  private globalInputMute = false;
+  private disabledDevices: Set<string> = new Set();
 
   constructor() {
     this.setupDeviceChangeListener();
@@ -433,6 +438,82 @@ export class BluetoothAudioManager {
         }
       }
     }
+  }
+
+  // Global mute controls for feedback prevention
+  setGlobalOutputMute(muted: boolean): void {
+    this.globalOutputMute = muted;
+    
+    if (this.masterGain) {
+      this.masterGain.gain.setValueAtTime(muted ? 0 : 1, this.context?.currentTime || 0);
+    }
+    
+    // Also mute all individual output channels for immediate effect
+    for (const [id, channel] of this.outputChannels) {
+      if (channel.gainNode) {
+        const targetGain = muted ? 0 : (channel.muted ? 0 : channel.volume);
+        channel.gainNode.gain.setValueAtTime(targetGain, this.context?.currentTime || 0);
+      }
+    }
+    
+    this.emit({ type: 'routing-changed', data: { globalOutputMute: muted } });
+  }
+
+  setGlobalInputMute(muted: boolean): void {
+    this.globalInputMute = muted;
+    
+    // Mute all input channels
+    for (const [id, channel] of this.inputChannels) {
+      if (channel.gainNode) {
+        const targetGain = muted ? 0 : (channel.muted ? 0 : channel.volume);
+        channel.gainNode.gain.setValueAtTime(targetGain, this.context?.currentTime || 0);
+      }
+    }
+    
+    this.emit({ type: 'routing-changed', data: { globalInputMute: muted } });
+  }
+
+  // Device disable/enable functionality
+  disableDevice(deviceId: string): void {
+    this.disabledDevices.add(deviceId);
+    
+    // Remove all channels associated with this device
+    const channelsToRemove = [
+      ...Array.from(this.inputChannels.values()).filter(c => c.deviceId === deviceId),
+      ...Array.from(this.outputChannels.values()).filter(c => c.deviceId === deviceId)
+    ];
+    
+    channelsToRemove.forEach(channel => {
+      this.removeChannel(channel.id);
+    });
+    
+    this.emit({ type: 'device-disconnected', device: this.devices.get(deviceId) });
+  }
+
+  enableDevice(deviceId: string): void {
+    this.disabledDevices.delete(deviceId);
+    
+    const device = this.devices.get(deviceId);
+    if (device) {
+      this.emit({ type: 'device-connected', device });
+    }
+  }
+
+  isDeviceDisabled(deviceId: string): boolean {
+    return this.disabledDevices.has(deviceId);
+  }
+
+  // Getters for global state
+  getGlobalOutputMute(): boolean {
+    return this.globalOutputMute;
+  }
+
+  getGlobalInputMute(): boolean {
+    return this.globalInputMute;
+  }
+
+  getDisabledDevices(): string[] {
+    return Array.from(this.disabledDevices);
   }
 
   getChannelLevels(channelId: string): { peak: number; rms: number } {

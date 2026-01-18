@@ -21,6 +21,9 @@ export interface BluetoothAudioState {
   routingMatrix: RoutingConnection[];
   bandwidthWarning: string | null;
   isScanning: boolean;
+  globalOutputMute: boolean;
+  globalInputMute: boolean;
+  disabledDevices: string[];
 }
 
 export interface ChannelLevels {
@@ -36,6 +39,9 @@ export function useBluetoothAudio() {
     routingMatrix: [],
     bandwidthWarning: null,
     isScanning: false,
+    globalOutputMute: false,
+    globalInputMute: false,
+    disabledDevices: [],
   });
 
   const [channelLevels, setChannelLevels] = useState<ChannelLevels>({});
@@ -48,6 +54,9 @@ export function useBluetoothAudio() {
       inputChannels: bluetoothAudioManager.getInputChannels(),
       outputChannels: bluetoothAudioManager.getOutputChannels(),
       routingMatrix: bluetoothAudioManager.getRoutingMatrix(),
+      globalOutputMute: bluetoothAudioManager.getGlobalOutputMute(),
+      globalInputMute: bluetoothAudioManager.getGlobalInputMute(),
+      disabledDevices: bluetoothAudioManager.getDisabledDevices(),
     }));
   }, []);
 
@@ -253,5 +262,23 @@ export function useBluetoothAudio() {
     getBluetoothDevices: () => bluetoothAudioManager.getBluetoothDevices(),
     getInputDevices: () => bluetoothAudioManager.getInputDevices(),
     getOutputDevices: () => bluetoothAudioManager.getOutputDevices(),
+    // New global controls for feedback prevention
+    setGlobalOutputMute: (muted: boolean) => {
+      bluetoothAudioManager.setGlobalOutputMute(muted);
+      updateState();
+    },
+    setGlobalInputMute: (muted: boolean) => {
+      bluetoothAudioManager.setGlobalInputMute(muted);
+      updateState();
+    },
+    disableDevice: (deviceId: string) => {
+      bluetoothAudioManager.disableDevice(deviceId);
+      updateState();
+    },
+    enableDevice: (deviceId: string) => {
+      bluetoothAudioManager.enableDevice(deviceId);
+      updateState();
+    },
+    isDeviceDisabled: (deviceId: string) => bluetoothAudioManager.isDeviceDisabled(deviceId),
   };
 }
