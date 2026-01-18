@@ -236,7 +236,7 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
               {displayError && <p className="text-red-400 text-sm">{displayError}</p>}
               <Button 
                 type="submit" 
-                className="w-full text-lg py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white" 
+                className="w-full text-lg py-6" 
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
@@ -274,7 +274,7 @@ export function SpaceChildAuthModal({ open, onOpenChange, onSuccess }: AuthModal
               {displayError && <p className="text-red-400 text-sm">{displayError}</p>}
               <Button 
                 type="submit" 
-                className="w-full text-lg py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white" 
+                className="w-full text-lg py-6" 
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}

@@ -149,7 +149,6 @@ export default function Privacy() {
           <div className="mt-12 text-center">
             <Button
               onClick={() => navigate('/')}
-              className="bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500"
             >
               Back to Home
             </Button>

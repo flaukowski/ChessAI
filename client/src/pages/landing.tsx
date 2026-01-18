@@ -117,7 +117,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   onClick={() => { setAuthMode('login'); setAuthOpen(true); }}
-                  className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
+                  className="text-lg px-10 py-6"
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
                   Sign In
@@ -127,7 +127,7 @@ export default function Landing() {
                 <Button 
                   size="lg" 
                   onClick={() => navigate('/studio')}
-                  className="text-lg px-10 py-6 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all text-white"
+                  className="text-lg px-10 py-6"
                 >
                   <Waves className="w-5 h-5 mr-2" />
                   Open Studio
