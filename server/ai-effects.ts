@@ -12,8 +12,13 @@ import {
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { authenticateToken } from "./auth";
 
 const router = Router();
+
+interface AuthenticatedRequest extends Request {
+  userId?: string;
+}
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -159,11 +164,11 @@ async function updateUserPreferences(
   }
 }
 
-router.get("/conversations", async (req: Request, res: Response) => {
+router.get("/conversations", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
     if (!userId) {
-      return res.status(401).json({ error: "User ID required" });
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const conversations = await db
@@ -179,11 +184,11 @@ router.get("/conversations", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/conversations", async (req: Request, res: Response) => {
+router.post("/conversations", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
     if (!userId) {
-      return res.status(401).json({ error: "User ID required" });
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const { title } = req.body;
@@ -202,10 +207,14 @@ router.post("/conversations", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/conversations/:id", async (req: Request, res: Response) => {
+router.get("/conversations/:id", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
 
     const [conversation] = await db
       .select()
@@ -228,10 +237,14 @@ router.get("/conversations/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/conversations/:id", async (req: Request, res: Response) => {
+router.delete("/conversations/:id", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
 
     const [conversation] = await db
       .select()
@@ -252,11 +265,15 @@ router.delete("/conversations/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/conversations/:id/messages", async (req: Request, res: Response) => {
+router.post("/conversations/:id/messages", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
 
     if (!content) {
       return res.status(400).json({ error: "Message content required" });
@@ -269,6 +286,10 @@ router.post("/conversations/:id/messages", async (req: Request, res: Response) =
 
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    if (conversation.userId !== userId) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     await db.insert(aiEffectMessages).values({
@@ -362,10 +383,10 @@ router.post("/conversations/:id/messages", async (req: Request, res: Response) =
   }
 });
 
-router.post("/quick-suggest", async (req: Request, res: Response) => {
+router.post("/quick-suggest", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { description, genre, currentEffects } = req.body;
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
 
     if (!description) {
       return res.status(400).json({ error: "Description required" });
@@ -411,11 +432,11 @@ router.post("/quick-suggest", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/preferences", async (req: Request, res: Response) => {
+router.get("/preferences", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
     if (!userId) {
-      return res.status(401).json({ error: "User ID required" });
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const prefs = await getUserPreferences(userId);
@@ -426,11 +447,11 @@ router.get("/preferences", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/preferences", async (req: Request, res: Response) => {
+router.put("/preferences", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.userId;
     if (!userId) {
-      return res.status(401).json({ error: "User ID required" });
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const { preferredGenres, preferredEffects, toneDescriptors, notes } = req.body;

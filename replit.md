@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+- **January 2026**: Added AI-powered audio effects suggestion system
+  - Users can chat naturally to describe their desired sound (e.g., "warm vintage tone with subtle shimmer")
+  - AI generates complete effect chains with all parameters tuned and ready to apply
+  - System learns and stores user style preferences for personalized future suggestions
+  - Uses OpenAI via Replit AI Integrations for effect recommendations
+  - Backend: `server/ai-effects.ts` with conversation management and streaming SSE responses
+  - Frontend: `client/src/components/ai-effect-chat.tsx` with chat UI
+  - Database tables: `ai_effect_conversations`, `ai_effect_messages`, `user_sound_preferences`
+  - All endpoints secured with JWT authentication via Bearer tokens
+
 - **January 2026**: Added BassPurr bass harmonics generator effect
   - Ported from firmware C implementation
   - Three signal paths: fundamental (HPF), even harmonics (rectification), odd harmonics (clipping)

@@ -148,11 +148,12 @@ export function AIEffectChat({
     setShowQuickPrompts(false);
 
     try {
+      const tokens = await import("@/lib/space-child-auth").then(m => m.getStoredTokens());
       const response = await fetch(`/api/v1/ai-effects/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": user?.id || "",
+          "Authorization": tokens?.accessToken ? `Bearer ${tokens.accessToken}` : "",
         },
         body: JSON.stringify({ content }),
       });

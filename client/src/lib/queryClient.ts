@@ -11,14 +11,7 @@ async function throwIfResNotOk(res: Response) {
 function getAuthHeaders(): Record<string, string> {
   const tokens = getStoredTokens();
   if (tokens?.accessToken) {
-    try {
-      const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]));
-      if (payload.userId) {
-        return { "x-user-id": payload.userId };
-      }
-    } catch {
-      // Ignore parse errors
-    }
+    return { "Authorization": `Bearer ${tokens.accessToken}` };
   }
   return {};
 }
