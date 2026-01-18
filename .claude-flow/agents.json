@@ -64,6 +64,84 @@
       },
       "createdAt": "2026-01-18T03:54:58.754Z",
       "domain": "hive-mind"
+    },
+    "hive-worker-1768736136140-etkf": {
+      "agentId": "hive-worker-1768736136140-etkf",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "worker",
+        "hiveRole": "worker"
+      },
+      "createdAt": "2026-01-18T11:35:36.140Z",
+      "domain": "hive-mind"
+    },
+    "optimizer-1768736498191-73eo": {
+      "agentId": "optimizer-1768736498191-73eo",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T11:41:38.191Z",
+      "domain": "hive-mind"
+    },
+    "optimizer-1768736498191-eoiv": {
+      "agentId": "optimizer-1768736498191-eoiv",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T11:41:38.191Z",
+      "domain": "hive-mind"
+    },
+    "optimizer-1768736498191-oi8x": {
+      "agentId": "optimizer-1768736498191-oi8x",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T11:41:38.191Z",
+      "domain": "hive-mind"
+    },
+    "optimizer-1768736498191-0neh": {
+      "agentId": "optimizer-1768736498191-0neh",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T11:41:38.191Z",
+      "domain": "hive-mind"
+    },
+    "optimizer-1768736498191-4fzj": {
+      "agentId": "optimizer-1768736498191-4fzj",
+      "agentType": "worker",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-18T11:41:38.191Z",
+      "domain": "hive-mind"
     }
   }
 }
