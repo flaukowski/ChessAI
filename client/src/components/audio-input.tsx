@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,24 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
   const [micError, setMicError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Cleanup object URL to prevent memory leaks
+  const revokeCurrentUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -48,6 +66,9 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
       return;
     }
 
+    // Revoke previous URL to prevent memory leaks
+    revokeCurrentUrl();
+
     setLoadedFile(file);
     setMicError(null);
 
@@ -57,11 +78,12 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
     // Create object URL and set on audio element
     if (audioRef.current) {
       const url = URL.createObjectURL(file);
+      objectUrlRef.current = url;
       audioRef.current.src = url;
       audioRef.current.load();
       onAudioElementReady(audioRef.current);
     }
-  }, [onAudioElementReady, onFileLoaded]);
+  }, [onAudioElementReady, onFileLoaded, revokeCurrentUrl]);
 
   const handleMicrophoneToggle = useCallback(async () => {
     if (inputSource === 'microphone') {
@@ -82,6 +104,7 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
   }, [inputSource, onMicrophoneConnect, onMicrophoneDisconnect]);
 
   const handleClearFile = useCallback(() => {
+    revokeCurrentUrl();
     setLoadedFile(null);
     if (audioRef.current) {
       audioRef.current.src = '';
@@ -89,12 +112,15 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [revokeCurrentUrl]);
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
     if (file && file.type.startsWith('audio/')) {
+      // Revoke previous URL to prevent memory leaks
+      revokeCurrentUrl();
+
       setLoadedFile(file);
       setMicError(null);
 
@@ -103,44 +129,79 @@ export const AudioInput = forwardRef<AudioInputRef, AudioInputProps>(function Au
 
       if (audioRef.current) {
         const url = URL.createObjectURL(file);
+        objectUrlRef.current = url;
         audioRef.current.src = url;
         audioRef.current.load();
         onAudioElementReady(audioRef.current);
       }
     }
-  }, [onAudioElementReady, onFileLoaded]);
+  }, [onAudioElementReady, onFileLoaded, revokeCurrentUrl]);
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
   }, []);
 
-  // Load audio from URL (for loading community recordings)
+  // Load audio from URL (for loading saved/community recordings)
   const loadFromUrl = useCallback(async (url: string, title: string) => {
     try {
+      console.log('[AudioInput] Loading from URL:', url);
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch audio');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
+      }
 
       const blob = await response.blob();
-      const extension = blob.type.split('/')[1] || 'wav';
-      const file = new File([blob], `${title}.${extension}`, { type: blob.type });
+      if (blob.size === 0) {
+        throw new Error('Audio file is empty');
+      }
+
+      // Determine content type and extension
+      const contentType = blob.type || response.headers.get('content-type') || 'audio/wav';
+      const extension = contentType.split('/')[1]?.split(';')[0] || 'wav';
+      const file = new File([blob], `${title}.${extension}`, { type: contentType });
+
+      console.log('[AudioInput] Loaded file:', file.name, 'size:', file.size, 'type:', file.type);
+
+      // Revoke previous URL to prevent memory leaks
+      revokeCurrentUrl();
 
       setLoadedFile(file);
       setMicError(null);
 
-      // Notify parent about the file
+      // Notify parent about the file (for export functionality)
       onFileLoaded?.(file);
 
       if (audioRef.current) {
         const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
         audioRef.current.src = objectUrl;
-        audioRef.current.load();
+        
+        // Wait for the audio to be ready before connecting
+        await new Promise<void>((resolve, reject) => {
+          const audio = audioRef.current!;
+          const handleCanPlay = () => {
+            audio.removeEventListener('canplaythrough', handleCanPlay);
+            audio.removeEventListener('error', handleError);
+            resolve();
+          };
+          const handleError = () => {
+            audio.removeEventListener('canplaythrough', handleCanPlay);
+            audio.removeEventListener('error', handleError);
+            reject(new Error('Audio failed to load'));
+          };
+          audio.addEventListener('canplaythrough', handleCanPlay);
+          audio.addEventListener('error', handleError);
+          audio.load();
+        });
+
+        console.log('[AudioInput] Audio loaded and ready, connecting to audio context');
         onAudioElementReady(audioRef.current);
       }
     } catch (error) {
-      console.error('Failed to load audio from URL:', error);
-      setMicError('Failed to load recording. Please try again.');
+      console.error('[AudioInput] Failed to load audio from URL:', error);
+      setMicError(`Failed to load recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [onAudioElementReady, onFileLoaded]);
+  }, [onAudioElementReady, onFileLoaded, revokeCurrentUrl]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({

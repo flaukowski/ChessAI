@@ -11,8 +11,26 @@ import express from "express";
 import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Serve uploaded recordings
-  app.use("/uploads/recordings", express.static(path.join(process.cwd(), "uploads", "recordings")));
+  // Serve uploaded recordings with proper headers for audio playback
+  app.use("/uploads/recordings", express.static(path.join(process.cwd(), "uploads", "recordings"), {
+    setHeaders: (res, filePath) => {
+      // Set proper MIME types for audio files
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.wav': 'audio/wav',
+        '.mp3': 'audio/mpeg',
+        '.ogg': 'audio/ogg',
+        '.webm': 'audio/webm',
+      };
+      if (mimeTypes[ext]) {
+        res.setHeader('Content-Type', mimeTypes[ext]);
+      }
+      // Allow range requests for audio seeking
+      res.setHeader('Accept-Ranges', 'bytes');
+      // Cache for 1 hour
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  }));
 
   // Auth routes (Space Child Auth integration)
   app.use("/api/space-child-auth", authRoutes);

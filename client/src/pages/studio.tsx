@@ -58,6 +58,7 @@ export default function Studio() {
   const [exportBitrate, setExportBitrate] = useState<128 | 192 | 256 | 320>(192);
   const [exportBitDepth, setExportBitDepth] = useState<16 | 24 | 32>(16);
   const [exportNormalize, setExportNormalize] = useState(true);
+  const [pendingRecording, setPendingRecording] = useState<{url: string, title: string} | null>(null);
 
   const audioFileRef = useRef<File | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -247,21 +248,23 @@ export default function Studio() {
   }, [handleAIChatSuggestion]);
 
   // Handler for loading recordings from the library
-  const handleLoadRecording = useCallback(async (recordingUrl: string, title: string) => {
-    try {
-      // Switch to DSP view to show the audio input
-      setActiveView('dsp');
-
-      // Use the audioInputRef to load the file from URL
-      if (audioInputRef.current) {
-        await audioInputRef.current.loadFromUrl(recordingUrl, title);
-      } else {
-        console.error('AudioInput ref not available');
-      }
-    } catch (error) {
-      console.error('Failed to load recording:', error);
-    }
+  const handleLoadRecording = useCallback((recordingUrl: string, title: string) => {
+    // Set pending recording and switch to DSP view
+    // The useEffect below will handle loading when the ref is available
+    setPendingRecording({ url: recordingUrl, title });
+    setActiveView('dsp');
   }, []);
+
+  // Effect to load pending recording when DSP view is active and ref is available
+  useEffect(() => {
+    if (pendingRecording && activeView === 'dsp' && audioInputRef.current) {
+      const { url, title } = pendingRecording;
+      setPendingRecording(null); // Clear immediately to prevent re-triggering
+      audioInputRef.current.loadFromUrl(url, title).catch(error => {
+        console.error('Failed to load recording:', error);
+      });
+    }
+  }, [pendingRecording, activeView]);
 
   const {
     devices,
