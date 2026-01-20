@@ -12,10 +12,20 @@ const transporter = nodemailer.createTransport({
 
 const fromEmail = process.env.FROM_EMAIL || 'noreply@audionoise.app';
 
+// Get the appropriate base URL for email links
+// Priority: APP_URL (production) > REPLIT_DEV_DOMAIN (development) > localhost
+const getBaseUrl = () => {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/$/, ''); // Remove trailing slash if present
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return 'http://localhost:5000';
+};
+
 export const sendVerificationEmail = async (to: string, token: string, firstName?: string) => {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : 'http://localhost:5000';
+  const baseUrl = getBaseUrl();
   
   const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
   const name = firstName || 'there';
@@ -63,9 +73,7 @@ export const sendVerificationEmail = async (to: string, token: string, firstName
 };
 
 export const sendPasswordResetEmail = async (to: string, token: string) => {
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : 'http://localhost:5000';
+  const baseUrl = getBaseUrl();
   
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
