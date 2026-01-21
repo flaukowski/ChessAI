@@ -3,7 +3,31 @@
  * Supports exporting audio to multiple formats: WAV, MP3, OGG/WebM
  */
 
-import { Mp3Encoder } from 'lamejs';
+// Mp3Encoder loaded dynamically to avoid CommonJS/ESM issues with lamejs
+let Mp3EncoderClass: any = null;
+let mp3LoadError: Error | null = null;
+
+async function loadMp3Encoder(): Promise<any> {
+  if (Mp3EncoderClass) return Mp3EncoderClass;
+  if (mp3LoadError) throw mp3LoadError;
+  
+  try {
+    // Dynamic import from esm.sh CDN which provides ESM-compatible version
+    // @ts-ignore - CDN import doesn't have type declarations
+    const lamejs = await import(/* @vite-ignore */ 'https://esm.sh/lamejs@1.2.1');
+    Mp3EncoderClass = lamejs.default?.Mp3Encoder || lamejs.Mp3Encoder;
+    
+    if (!Mp3EncoderClass) {
+      throw new Error('Mp3Encoder not found in lamejs module');
+    }
+    
+    return Mp3EncoderClass;
+  } catch (err) {
+    mp3LoadError = err instanceof Error ? err : new Error('Failed to load MP3 encoder');
+    console.error('MP3 encoder load failed:', err);
+    throw mp3LoadError;
+  }
+}
 import {
   loadEffectWorklets,
   createWorkletEffect,
@@ -300,6 +324,12 @@ async function encodeMp3(
 ): Promise<Blob> {
   const numChannels = channels.length;
   const numSamples = channels[0].length;
+
+  // Load MP3 encoder dynamically
+  const Mp3Encoder = await loadMp3Encoder();
+  if (!Mp3Encoder) {
+    throw new Error('Failed to load MP3 encoder');
+  }
 
   // Create encoder
   const encoder = new Mp3Encoder(numChannels, sampleRate, bitrate);
