@@ -177,6 +177,7 @@ export function RecordingControls({
                 size="sm"
                 onClick={onNavigateToLibrary}
                 className="text-xs"
+                data-testid="button-my-recordings"
               >
                 <Library className="w-4 h-4 mr-1" />
                 My Recordings

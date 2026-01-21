@@ -7,11 +7,18 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, Trash2, Globe, Lock, MoreVertical, Edit2, Share2, Copy, Check,
-  Music, Clock, Calendar, Loader2, RefreshCw, Search, Download, Upload
+  Music, Clock, Calendar, Loader2, RefreshCw, Search, Download, Upload, FileAudio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +40,14 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDuration } from '@/hooks/use-audio-recorder';
 import { cn } from '@/lib/utils';
+import {
+  exportAudio,
+  loadAudioFile,
+  downloadAudio,
+  isFormatSupported,
+  FORMAT_INFO,
+  type AudioFormat,
+} from '@/lib/dsp/audio-export';
 
 interface Recording {
   id: string;
@@ -68,6 +83,10 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
   const [sharingRecording, setSharingRecording] = useState<Recording | null>(null);
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadingRecording, setDownloadingRecording] = useState<Recording | null>(null);
+  const [downloadFormat, setDownloadFormat] = useState<'original' | 'wav' | 'mp3' | 'ogg'>('original');
+  const [isDownloading, setIsDownloading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchRecordings = useCallback(async () => {
@@ -214,6 +233,62 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [sharingRecording]);
+
+  const handleOpenDownload = useCallback((recording: Recording) => {
+    setDownloadingRecording(recording);
+    setDownloadFormat('original');
+    setDownloadDialogOpen(true);
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    if (!downloadingRecording) return;
+
+    if (downloadFormat === 'original') {
+      // Direct download of original file
+      const a = document.createElement('a');
+      a.href = downloadingRecording.fileUrl;
+      a.download = `${downloadingRecording.title}.${downloadingRecording.format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setDownloadDialogOpen(false);
+      return;
+    }
+
+    // Convert to selected format
+    setIsDownloading(true);
+    try {
+      // Fetch the audio file
+      const response = await fetch(downloadingRecording.fileUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Create audio context and decode
+      const audioContext = new AudioContext();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      await audioContext.close();
+
+      // Export to selected format (no effects chain, just format conversion)
+      const blob = await exportAudio(
+        audioBuffer,
+        [], // No effects
+        1, // Input gain
+        1, // Output gain
+        {
+          format: downloadFormat as AudioFormat,
+          normalize: false,
+        }
+      );
+
+      // Download the converted file
+      downloadAudio(blob, downloadingRecording.title, downloadFormat as AudioFormat);
+      setDownloadDialogOpen(false);
+    } catch (err) {
+      console.error('Download/conversion failed:', err);
+      alert('Failed to convert recording. Please try downloading the original format.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [downloadingRecording, downloadFormat]);
 
   const filteredRecordings = recordings.filter(r =>
     r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -380,11 +455,9 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
                                 Load in Studio
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem asChild>
-                              <a href={recording.fileUrl} download={`${recording.title}.${recording.format}`}>
-                                <Download className="w-4 h-4 mr-2" />
-                                Download
-                              </a>
+                            <DropdownMenuItem onClick={() => handleOpenDownload(recording)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -465,6 +538,71 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShareDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Download Dialog */}
+      <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileAudio className="w-5 h-5" />
+              Download Recording
+            </DialogTitle>
+            <DialogDescription>
+              Choose a format to download "{downloadingRecording?.title}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Format</Label>
+              <Select
+                value={downloadFormat}
+                onValueChange={(value) => setDownloadFormat(value as typeof downloadFormat)}
+              >
+                <SelectTrigger data-testid="select-download-format">
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="original">
+                    Original ({downloadingRecording?.format?.toUpperCase() || 'OGG'})
+                  </SelectItem>
+                  <SelectItem value="wav">
+                    WAV - Uncompressed, best quality
+                  </SelectItem>
+                  <SelectItem value="mp3" disabled={!isFormatSupported('mp3')}>
+                    MP3 - Compressed, widely compatible {!isFormatSupported('mp3') && '(Not supported)'}
+                  </SelectItem>
+                  <SelectItem value="ogg" disabled={!isFormatSupported('ogg')}>
+                    OGG - Compressed, open format {!isFormatSupported('ogg') && '(Not supported)'}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {downloadFormat !== 'original' && (
+              <p className="text-sm text-muted-foreground">
+                The recording will be converted to {FORMAT_INFO[downloadFormat as AudioFormat]?.name || downloadFormat.toUpperCase()} format before downloading.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDownloadDialogOpen(false)} disabled={isDownloading}>
+              Cancel
+            </Button>
+            <Button onClick={handleDownload} disabled={isDownloading} data-testid="button-download-confirm">
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Converting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
