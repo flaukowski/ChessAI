@@ -6,44 +6,48 @@
   <br>
   🎛️ AudioNoise Web
   <br>
-  <sub>Real-time audio DSP in your browser</sub>
+  <sub>Professional Audio DSP Platform</sub>
 </h1>
 
 <p align="center">
-  <strong>Professional-grade audio effects ported from torvalds/AudioNoise C algorithms</strong>
+  <strong>Real-time audio processing with team collaboration, subscriptions, and social features</strong>
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
   <a href="#quick-start">Quick Start</a> •
-  <a href="#dsp-engine">DSP Engine</a> •
+  <a href="#subscriptions">Subscriptions</a> •
+  <a href="#api">API</a> •
   <a href="#architecture">Architecture</a> •
-  <a href="#contributing">Contributing</a> •
-  <a href="#support">Support</a>
+  <a href="#contributing">Contributing</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" />
   <img src="https://img.shields.io/badge/Web%20Audio%20API-FF6B6B?style=flat-square&logo=webaudio&logoColor=white" alt="Web Audio API" />
-  <img src="https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/License-GPL%20v2-blue?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/Stripe-008CDD?style=flat-square&logo=stripe&logoColor=white" alt="Stripe" />
+  <img src="https://img.shields.io/badge/PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
 </p>
 
 ---
 
-## ✨ The Vision
+## ✨ Overview
 
-**AudioNoise Web** brings professional guitar pedal DSP effects to your browser. Process audio in real-time with sub-millisecond latency using algorithms ported from Linus Torvalds' [AudioNoise](https://github.com/torvalds/AudioNoise) C library.
+**AudioNoise Web** is a professional-grade browser-based audio effects platform with:
 
-> *"The main design goal has been to learn about digital audio processing basics. Just IIR filters and basic delay loops. Everything is single sample in, single sample out with no latency."* — Linus Torvalds
+- **10 DSP Effects** — Ported from Linus Torvalds' AudioNoise C algorithms
+- **Team Workspaces** — Collaborate with RBAC permissions
+- **Subscription Tiers** — Free, Pro, and Studio plans
+- **Social Features** — Profiles, follows, likes, comments
+- **AI Suggestions** — Intelligent effect recommendations
+- **GDPR Compliant** — Full data export and deletion
 
 ---
 
 ## 🚀 Features
 
-### 🎛️ AudioNoise DSP Engine
-Real-time audio processing ported from C-based guitar pedal algorithms:
+### 🎛️ DSP Effects Engine
 
 | Effect | Description |
 |--------|-------------|
@@ -54,23 +58,50 @@ Real-time audio processing ported from C-based guitar pedal algorithms:
 | **High Pass** | Clean up muddy frequencies |
 | **Band Pass** | Isolate frequency ranges |
 | **Notch** | Surgical frequency removal |
-| **All Pass** | Phase shifting without amplitude change |
+| **All Pass** | Phase shifting |
+| **Distortion** | Soft/hard clipping saturation |
+| **Growling Bass** | Subharmonic generator with harmonics |
 
-### 📊 Real-Time Visualization
-- **Waveform** — Time-domain audio visualization
-- **Spectrum Analyzer** — Frequency distribution bars
-- **Spectrogram** — Scrolling frequency/time heatmap
+### 💼 Team Workspaces
 
-### 🎤 Multiple Input Sources
-- **File Upload** — Process any audio file (MP3, WAV, OGG)
-- **Microphone** — Live real-time processing
-- **Bluetooth** — Multi-channel instrument routing
+- Create team workspaces for collaboration
+- Role-based access control (Admin, Editor, Viewer)
+- Invite members via email
+- Share recordings within workspaces
 
-### 🤖 Optional AI Effect Suggestions
-- Bring your own API key (OpenAI, Anthropic, Ollama, or custom)
-- Analyzes your audio in real-time
-- Recommends effects based on frequency profile
-- One-click effect application with optimized parameters
+### 💳 Subscription Tiers
+
+| Feature | Free | Pro ($9.99/mo) | Studio ($19.99/mo) |
+|---------|------|----------------|-------------------|
+| Effects in chain | 3 | 10 | Unlimited |
+| Recordings | 5 | 50 | Unlimited |
+| Storage | 100MB | 2GB | 20GB |
+| AI suggestions | 10/mo | 100/mo | Unlimited |
+| Export formats | WAV | WAV, MP3, OGG | WAV, MP3, OGG, FLAC |
+| Team workspaces | ❌ | ❌ | ✅ |
+| API access | ❌ | ✅ | ✅ |
+| Priority support | ❌ | ❌ | ✅ |
+
+### 👥 Social Features
+
+- **User Profiles** — Bio, avatar, social links
+- **Follow System** — Follow your favorite creators
+- **Likes & Comments** — Engage with public recordings
+- **Notifications** — Stay updated on activity
+
+### 🤖 AI Effect Suggestions
+
+- Bring your own API key (OpenAI, Anthropic, Ollama)
+- Encrypted API key storage (AES-256-GCM)
+- Real-time audio analysis
+- One-click effect application
+
+### 🔒 Security & Compliance
+
+- **ZKP Authentication** — Zero-knowledge proof login
+- **AES-256-GCM Encryption** — For sensitive data
+- **GDPR Compliant** — Data export and deletion
+- **Audit Logging** — Full activity tracking
 
 ---
 
@@ -84,59 +115,124 @@ cd audionoise-web
 # Install dependencies
 npm install
 
+# Set up environment variables
+cp .env.example .env
+
+# Push database schema
+npm run db:push
+
 # Start development server
 npm run dev
 ```
 
-Open `http://localhost:5000` in your browser.
+### Environment Variables
+
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/audionoise
+
+# Authentication
+JWT_SECRET=your-secret-key
+
+# Encryption (64 hex characters = 32 bytes)
+ENCRYPTION_MASTER_KEY=0123456789abcdef...
+
+# Stripe (optional)
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_STUDIO=price_...
+
+# Admin
+ADMIN_USER_IDS=user-id-1,user-id-2
+```
 
 ---
 
-## 🔧 DSP Engine
+## 💳 Subscriptions
 
-The **AudioNoise DSP Engine** is a complete audio processing toolkit ported from C to TypeScript/Web Audio API.
+AudioNoise Web uses Stripe for subscription management.
 
-### Architecture
+### Setting Up Stripe
 
+1. Create products and prices in Stripe Dashboard
+2. Set up webhook endpoint: `/api/v1/billing/webhook`
+3. Configure environment variables
+
+### Webhook Events Handled
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.paid`
+- `invoice.payment_failed`
+
+---
+
+## 🔌 API
+
+### Authentication
+
+```bash
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+POST /api/v1/auth/logout
 ```
-client/src/lib/dsp/
-├── audio-engine.ts      # Web Audio context management
-├── lfo.ts               # Low Frequency Oscillator
-├── biquad.ts            # IIR filter implementations
-├── delay-line.ts        # Circular buffer with interpolation
-├── effects/
-│   ├── echo.ts          # Delay-based echo
-│   ├── flanger.ts       # Modulated delay flanger
-│   └── phaser.ts        # Allpass cascade phaser
-└── index.ts             # Module exports
+
+### Recordings
+
+```bash
+GET    /api/v1/recordings
+POST   /api/v1/recordings
+GET    /api/v1/recordings/:id
+PUT    /api/v1/recordings/:id
+DELETE /api/v1/recordings/:id
+GET    /api/v1/recordings/public
 ```
 
-### Design Philosophy
+### Billing
 
-Inspired by the original AudioNoise C library:
+```bash
+GET  /api/v1/billing/subscription
+POST /api/v1/billing/checkout
+POST /api/v1/billing/portal
+GET  /api/v1/billing/usage
+POST /api/v1/billing/cancel
+```
 
-- **Zero Latency** — Single sample in, single sample out
-- **IIR Filters** — Efficient recursive filtering
-- **Real-Time Safe** — No allocations in audio path
-- **Analog Emulation** — Digital recreation of classic circuits
+### Workspaces
 
-### Usage
+```bash
+GET    /api/v1/workspaces
+POST   /api/v1/workspaces
+GET    /api/v1/workspaces/:id
+PUT    /api/v1/workspaces/:id
+DELETE /api/v1/workspaces/:id
+POST   /api/v1/workspaces/:id/invite
+GET    /api/v1/workspaces/:id/members
+```
 
-```typescript
-import { audioEngine, createEchoNode, createPhaserNode } from '@/lib/dsp';
+### Social
 
-// Initialize engine
-await audioEngine.initialize();
+```bash
+GET  /api/v1/social/profile
+PUT  /api/v1/social/profile
+GET  /api/v1/social/users/:username
+POST /api/v1/social/follow/:userId
+GET  /api/v1/social/recordings/:id/likes
+POST /api/v1/social/recordings/:id/comments
+GET  /api/v1/social/notifications
+```
 
-// Connect audio source
-await audioEngine.connectMicrophone();
+### GDPR
 
-// Add effects
-const echo = createEchoNode(audioEngine.audioContext, 300, 0.5, 0.5);
-audioEngine.addEffect(echo.input);
-
-// Get visualization data
-const freqData = audioEngine.getFrequencyData();
+```bash
+GET  /api/v1/gdpr/consent
+POST /api/v1/gdpr/consent
+POST /api/v1/gdpr/export
+POST /api/v1/gdpr/delete
 ```
 
 ---
@@ -145,24 +241,33 @@ const freqData = audioEngine.getFrequencyData();
 
 ```
 audionoise-web/
-├── client/                 # React frontend
+├── client/                     # React frontend
 │   ├── src/
-│   │   ├── components/     # UI components
-│   │   │   ├── effects-rack.tsx
-│   │   │   ├── audio-visualizer.tsx
-│   │   │   ├── ai-effect-suggester.tsx
-│   │   │   └── audio-input.tsx
-│   │   ├── hooks/          # React hooks
-│   │   │   └── use-audio-dsp.ts
+│   │   ├── components/         # UI components
+│   │   │   ├── ui/             # shadcn/ui primitives
+│   │   │   ├── pedalboard.tsx  # Effect chain UI
+│   │   │   ├── error-boundary.tsx
+│   │   │   └── ...
+│   │   ├── hooks/              # React hooks
 │   │   ├── lib/
-│   │   │   └── dsp/        # AudioNoise DSP library
+│   │   │   └── dsp/            # AudioNoise DSP library
 │   │   └── pages/
-│   │       └── studio.tsx  # Main application
-│   └── index.html
-├── server/                 # Express backend
-├── reference/              # Original C algorithms
-│   └── audionoise-c/
-└── shared/                 # Shared types
+│   └── public/
+│       └── worklets/           # AudioWorklet processors
+├── server/                     # Express backend
+│   ├── auth.ts                 # Authentication
+│   ├── stripe.ts               # Billing
+│   ├── workspaces.ts           # Team workspaces
+│   ├── social.ts               # Social features
+│   ├── analytics.ts            # Event tracking
+│   ├── gdpr.ts                 # GDPR compliance
+│   ├── encryption.ts           # AES-256-GCM
+│   └── middleware/
+│       └── tier-gating.ts      # Feature limits
+├── shared/                     # Shared code
+│   ├── schema.ts               # Database schema (Drizzle)
+│   └── tiers.ts                # Subscription definitions
+└── .github/workflows/          # CI/CD (local only)
 ```
 
 ---
@@ -174,69 +279,42 @@ audionoise-web/
 | **Frontend** | React 18, TypeScript, Tailwind CSS |
 | **UI Components** | shadcn/ui, Radix Primitives |
 | **Audio** | Web Audio API, AudioWorklet |
-| **State** | React Query, Zustand |
 | **Backend** | Express, Node.js |
-| **Build** | Vite, ESBuild |
+| **Database** | PostgreSQL, Drizzle ORM |
+| **Payments** | Stripe |
+| **Auth** | JWT, ZKP |
+| **Build** | Vite |
 
 ---
 
 ## 🤝 Contributing
 
-We love contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-**Quick contribution ideas:**
-- 🎸 Port more effects from AudioNoise (FM synthesis, AM synthesis, distortion)
-- 📊 Add FFT frequency-domain analysis (see [issue #37](https://github.com/torvalds/AudioNoise/issues/37))
-- 🎛️ Add granular synthesis controls (see [issue #40](https://github.com/torvalds/AudioNoise/issues/40))
-- 🧪 Add unit tests for DSP algorithms
-- 📱 Improve mobile responsiveness
-
----
-
-## 💖 Support the Project
-
-If AudioNoise Web helps you process audio, consider supporting development:
-
-### Ethereum / EVM Chains
-```
-REDACTED_WALLET_ADDRESS
-```
-
-<p align="center">
-  <a href="https://etherscan.io/address/REDACTED_WALLET_ADDRESS">
-    <img src="https://img.shields.io/badge/Donate-ETH-627EEA?style=for-the-badge&logo=ethereum&logoColor=white" alt="Donate ETH" />
-  </a>
-</p>
-
-Your support helps us:
-- 🚀 Port more effects from AudioNoise
-- 🔊 Add FFT visualization and analysis
-- 📱 Improve mobile experience
-- 📚 Create tutorials and documentation
+**Areas we'd love help with:**
+- 🎸 New DSP effects (reverb, compressor, EQ)
+- 🧪 Test coverage improvements
+- 📱 Mobile experience
+- 🌍 Internationalization
+- 📚 Documentation
 
 ---
 
 ## 📜 License
 
-This project is licensed under the **GNU General Public License v2** — see the [LICENSE](LICENSE) file for details.
-
-This is free and open source software. You are free to use, modify, and distribute this software under the terms of the GPL v2.
+This project is licensed under the **GNU General Public License v2** — see [LICENSE](LICENSE).
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **AudioNoise** — Original C DSP algorithms for guitar pedals
-- **DaisySP** — Inspiration for flanger implementation
-- **Web Audio API** — Making browser audio processing possible
+- **AudioNoise** — Original C DSP algorithms
+- **Linus Torvalds** — DSP algorithm design
 - **shadcn/ui** — Beautiful component primitives
+- **Stripe** — Payment infrastructure
 
 ---
 
 <p align="center">
-  <strong>Built with 💜 for audio enthusiasts</strong>
-</p>
-
-<p align="center">
-  <sub>AudioNoise Web — Real-time DSP in your browser</sub>
+  <strong>Built with 💜 for audio professionals</strong>
 </p>

@@ -1,8 +1,8 @@
-# Contributing to SonicVision
+# Contributing to AudioNoise Web
 
-First off, thank you for considering contributing to SonicVision! 🎵
+First off, thank you for considering contributing to AudioNoise Web!
 
-This project combines AI music generation with real-time DSP processing, and we're excited to have you join us in pushing the boundaries of what's possible in browser-based audio.
+This project is a professional-grade browser-based audio effects platform with real-time DSP processing, team collaboration, subscriptions, and social features. We're excited to have you join us in pushing the boundaries of what's possible in browser-based audio.
 
 ## Table of Contents
 
@@ -12,6 +12,7 @@ This project combines AI music generation with real-time DSP processing, and we'
 - [Project Structure](#project-structure)
 - [How to Contribute](#how-to-contribute)
 - [DSP Development Guidelines](#dsp-development-guidelines)
+- [Backend Development](#backend-development)
 - [Pull Request Process](#pull-request-process)
 - [Style Guide](#style-guide)
 
@@ -32,27 +33,37 @@ This project follows a simple code of conduct:
 
 ### Prerequisites
 
-- **Node.js** 18+ 
+- **Node.js** 18+
 - **npm** or **pnpm**
+- **PostgreSQL** 14+
 - Basic understanding of:
   - TypeScript
   - React
   - Web Audio API (for DSP contributions)
+  - Express.js (for backend contributions)
+  - Drizzle ORM (for database contributions)
 
 ### Development Setup
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/sonicvision.git
-cd sonicvision
+git clone https://github.com/YOUR_USERNAME/audionoise-web.git
+cd audionoise-web
 
 # Install dependencies
 npm install
 
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your database credentials and other settings
+
+# Push database schema
+npm run db:push
+
 # Start the development server
 npm run dev
 
-# Run tests (when available)
+# Run tests
 npm test
 ```
 
@@ -63,13 +74,14 @@ The app will be available at `http://localhost:5000`.
 ## Project Structure
 
 ```
-sonicvision/
+audionoise-web/
 ├── client/                     # React frontend
 │   ├── src/
 │   │   ├── components/         # React components
 │   │   │   ├── ui/             # shadcn/ui primitives
-│   │   │   ├── effects-rack.tsx
+│   │   │   ├── pedalboard.tsx  # Effect chain UI
 │   │   │   ├── audio-visualizer.tsx
+│   │   │   ├── error-boundary.tsx
 │   │   │   └── ...
 │   │   ├── hooks/              # Custom React hooks
 │   │   │   ├── use-audio-dsp.ts
@@ -80,12 +92,25 @@ sonicvision/
 │   │   │   │   ├── lfo.ts
 │   │   │   │   ├── biquad.ts
 │   │   │   │   ├── delay-line.ts
+│   │   │   │   ├── effect-registry.ts
 │   │   │   │   └── effects/
 │   │   │   └── utils.ts
 │   │   └── pages/              # Page components
-│   └── index.html
+│   └── public/
+│       └── worklets/           # AudioWorklet processors
 ├── server/                     # Express backend
-├── shared/                     # Shared types and schemas
+│   ├── auth.ts                 # Authentication (ZKP)
+│   ├── stripe.ts               # Billing & subscriptions
+│   ├── workspaces.ts           # Team workspaces
+│   ├── social.ts               # Social features
+│   ├── analytics.ts            # Event tracking
+│   ├── gdpr.ts                 # GDPR compliance
+│   ├── encryption.ts           # AES-256-GCM utilities
+│   └── middleware/
+│       └── tier-gating.ts      # Subscription feature limits
+├── shared/                     # Shared code
+│   ├── schema.ts               # Database schema (Drizzle)
+│   └── tiers.ts                # Subscription tier definitions
 └── reference/                  # Original AudioNoise C code
     └── audionoise-c/
 ```
@@ -122,6 +147,7 @@ Look for issues labeled `good first issue` — these are great starting points:
 - UI polish and accessibility
 - Simple bug fixes
 - Test coverage
+- Internationalization (i18n)
 
 #### Intermediate Contributions
 
@@ -129,6 +155,8 @@ Look for issues labeled `good first issue` — these are great starting points:
 - UI/UX improvements
 - Performance optimizations
 - Mobile responsiveness
+- Social feature enhancements
+- Workspace UI improvements
 
 #### Advanced Contributions
 
@@ -136,12 +164,15 @@ Look for issues labeled `good first issue` — these are great starting points:
 - AudioWorklet implementations
 - AI integration improvements
 - Architecture improvements
+- Billing/Stripe integration
+- Analytics and reporting
+- Security hardening
 
 ---
 
 ## DSP Development Guidelines
 
-The AudioNoise DSP library is the heart of SonicVision's audio processing. Contributing to it requires special care.
+The AudioNoise DSP library is the heart of AudioNoise Web's audio processing. Contributing to it requires special care.
 
 ### Porting Effects from C
 
@@ -195,6 +226,76 @@ for (let i = 0; i < testSignal.length; i++) {
 // Verify filter response
 const filtered = applyFilter(testSignal, lowpassFilter);
 // Check magnitude at specific frequencies
+```
+
+---
+
+## Backend Development
+
+### Server Architecture
+
+The backend uses Express.js with TypeScript and follows a modular architecture:
+
+- **Route handlers** — Separate files for each domain (auth, billing, workspaces, social)
+- **Middleware** — Authentication, tier gating, rate limiting
+- **Storage** — Drizzle ORM with PostgreSQL
+- **Encryption** — AES-256-GCM for sensitive data
+
+### Adding New API Endpoints
+
+1. **Define schema** — Add tables to `shared/schema.ts`
+2. **Create route handler** — Add new file in `server/` (e.g., `server/my-feature.ts`)
+3. **Register routes** — Add to `server/routes.ts`
+4. **Add middleware** — Use `requireAuth` for protected routes
+
+```typescript
+// Example route handler structure
+import { Router } from 'express';
+import { requireAuth } from './auth';
+import { db } from './db';
+
+const router = Router();
+
+router.get('/', requireAuth, async (req, res) => {
+  const userId = req.user!.id;
+  // ... implementation
+  res.json({ data });
+});
+
+export default router;
+```
+
+### Database Migrations
+
+We use Drizzle ORM for database management:
+
+```bash
+# Push schema changes to database
+npm run db:push
+
+# Generate migration (if using migrations)
+npm run db:generate
+```
+
+### Stripe Integration
+
+For billing contributions, familiarize yourself with:
+
+- `server/stripe.ts` — Checkout, webhooks, billing portal
+- `shared/tiers.ts` — Subscription tier limits
+- `server/middleware/tier-gating.ts` — Feature enforcement
+
+### Testing Backend Code
+
+```typescript
+// server/__tests__/my-feature.test.ts
+import { describe, it, expect } from 'vitest';
+
+describe('MyFeature', () => {
+  it('should handle valid request', async () => {
+    // ... test implementation
+  });
+});
 ```
 
 ---
@@ -311,7 +412,7 @@ Contributors are recognized in:
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/yourusername/sonicvision/discussions)
+- Open a [Discussion](https://github.com/yourusername/audionoise-web/discussions)
 - Check existing issues and PRs
 - Reach out to maintainers
 
@@ -319,10 +420,10 @@ Contributors are recognized in:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the GNU General Public License v2.
 
 ---
 
 <p align="center">
-  <strong>Thank you for helping make SonicVision better! 🎵</strong>
+  <strong>Thank you for helping make AudioNoise Web better!</strong>
 </p>
