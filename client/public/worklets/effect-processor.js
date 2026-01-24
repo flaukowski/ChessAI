@@ -1140,6 +1140,186 @@ class ReverbProcessor extends AudioWorkletProcessor {
   }
 }
 
+/**
+ * GrowlingBass Processor
+ * Growling/purring bass effect with subharmonic generation and harmonic distortion
+ * Ported from C implementation by Philippe Strauss <catseyechandra@proton.me>
+ *
+ * Features:
+ * - Minus one octave subharmonic generation (octave down)
+ * - Odd harmonics via hard clipping with envelope-following
+ * - Even harmonics via full-wave rectification
+ * - Tunable tone control (LPF on harmonics)
+ */
+class GrowlingBassProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'subLevel', defaultValue: 0.5, minValue: 0, maxValue: 1 },      // Subharmonic level
+      { name: 'oddLevel', defaultValue: 0.3, minValue: 0, maxValue: 1 },      // Odd harmonics level
+      { name: 'evenLevel', defaultValue: 0.3, minValue: 0, maxValue: 1 },     // Even harmonics level
+      { name: 'toneFreq', defaultValue: 800, minValue: 100, maxValue: 4000 }, // Tone filter frequency
+      { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
+      { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
+    ];
+  }
+
+  constructor() {
+    super();
+    // Biquad filter states [x1, x2, y1, y2] per channel
+    // Input LPF @ 300Hz for subharmonic chain
+    this.lpfInState = [[0, 0, 0, 0], [0, 0, 0, 0]];
+    // Odd harmonics LPF
+    this.lpfOddState = [[0, 0, 0, 0], [0, 0, 0, 0]];
+    // Even harmonics LPF
+    this.lpfEvenState = [[0, 0, 0, 0], [0, 0, 0, 0]];
+
+    // Subharmonic tracking state per channel
+    this.nPeriods = [0, 0];
+    this.previousSign = [-1, -1];
+    this.previousMinmax = [0, 0];
+    this.minmax = [0, 0];
+
+    // Pre-computed input LPF coefficients @ 300Hz, Q=0.707
+    this.lpfInCoeffs = this.calcLpfCoeffs(300, 0.707);
+
+    // Tone filter coefficients (will be updated when toneFreq changes)
+    this.toneCoeffs = this.calcLpfCoeffs(800, 0.707);
+    this.lastToneFreq = 800;
+  }
+
+  // Calculate 2nd order Butterworth LPF coefficients
+  calcLpfCoeffs(fc, Q) {
+    const w0 = TWO_PI * fc / sampleRate;
+    const cos_w0 = Math.cos(w0);
+    const sin_w0 = Math.sin(w0);
+    const alpha = sin_w0 / (2 * Q);
+
+    const a0 = 1 + alpha;
+    return {
+      b0: ((1 - cos_w0) / 2) / a0,
+      b1: (1 - cos_w0) / a0,
+      b2: ((1 - cos_w0) / 2) / a0,
+      a1: (-2 * cos_w0) / a0,
+      a2: (1 - alpha) / a0
+    };
+  }
+
+  // Direct Form I biquad processing
+  processBiquad(x, state, coeffs) {
+    const y = coeffs.b0 * x + coeffs.b1 * state[0] + coeffs.b2 * state[1]
+            - coeffs.a1 * state[2] - coeffs.a2 * state[3];
+    state[1] = state[0];
+    state[0] = x;
+    state[3] = state[2];
+    state[2] = y;
+    return y;
+  }
+
+  // Hard clip for odd harmonics - clips at envelope-tracked ceiling
+  hardClip(x, ceil) {
+    if (x > 0.05) return ceil;
+    if (x < -0.05) return -ceil;
+    return x;
+  }
+
+  // Sign function for period detection
+  sgn(x) {
+    return x > 0 ? 1 : -1;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const output = outputs[0];
+
+    if (!input || !input[0]) return true;
+
+    const bypass = parameters.bypass[0] > 0.5;
+    const mix = parameters.mix[0];
+    const subLevel = parameters.subLevel[0];
+    const oddLevel = parameters.oddLevel[0];
+    const evenLevel = parameters.evenLevel[0];
+    const toneFreq = parameters.toneFreq[0];
+
+    // Update tone filter coefficients when frequency changes
+    if (Math.abs(toneFreq - this.lastToneFreq) > 1) {
+      this.toneCoeffs = this.calcLpfCoeffs(toneFreq, 0.707);
+      this.lastToneFreq = toneFreq;
+    }
+
+    const numChannels = Math.min(input.length, output.length, 2);
+    const blockSize = input[0].length;
+
+    for (let ch = 0; ch < numChannels; ch++) {
+      const inputChannel = input[ch];
+      const outputChannel = output[ch];
+
+      for (let i = 0; i < blockSize; i++) {
+        const dry = inputChannel[i];
+
+        if (bypass) {
+          outputChannel[i] = dry;
+          continue;
+        }
+
+        // Input filter for subharmonic chain (300Hz LPF)
+        const filteredIn = this.processBiquad(dry, this.lpfInState[ch], this.lpfInCoeffs);
+
+        // Odd harmonics: hard clip with envelope-following ceiling
+        const shapedOdd = this.hardClip(filteredIn, this.previousMinmax[ch]);
+
+        // Even harmonics: full-wave rectification
+        const shapedEven = Math.abs(dry);
+
+        // Sign detection for period tracking
+        const sign = this.sgn(filteredIn);
+
+        // Rising edge detection - start of new period
+        if ((sign - this.previousSign[ch]) > 1) {
+          this.nPeriods[ch] += 1;
+          this.previousMinmax[ch] = this.minmax[ch];
+          this.minmax[ch] = 0;
+        }
+
+        // Track maximum amplitude for envelope
+        const absDry = Math.abs(dry);
+        if (absDry > this.minmax[ch]) {
+          this.minmax[ch] = absDry;
+        }
+
+        // Subharmonic generation: output every other half-period
+        let shapedSub = 0;
+        if (sign > 0) {
+          // One period over two
+          if ((this.nPeriods[ch] % 2) === 0) {
+            shapedSub = filteredIn;  // Output this alternance
+          } else {
+            shapedSub = -filteredIn; // Or its negative counterpart
+          }
+        }
+
+        // Apply tone filter to harmonics
+        const filteredOdd = this.processBiquad(shapedOdd, this.lpfOddState[ch], this.toneCoeffs);
+        const filteredEven = this.processBiquad(shapedEven, this.lpfEvenState[ch], this.toneCoeffs);
+
+        this.previousSign[ch] = sign;
+
+        // Mix all components
+        const wet = shapedSub * subLevel + dry
+                  + filteredOdd * oddLevel
+                  + filteredEven * evenLevel;
+
+        // Soft limiter for safety
+        const limited = wet / (1 + Math.abs(wet) * 0.5);
+
+        // Wet/dry mix
+        outputChannel[i] = dry * (1 - mix) + limited * mix;
+      }
+    }
+
+    return true;
+  }
+}
+
 // Register all processors
 registerProcessor('eq-processor', EQProcessor);
 registerProcessor('distortion-processor', DistortionProcessor);
@@ -1150,3 +1330,4 @@ registerProcessor('level-meter-processor', LevelMeterProcessor);
 registerProcessor('basspurr-processor', BassPurrProcessor);
 registerProcessor('tremolo-processor', TremoloProcessor);
 registerProcessor('reverb-processor', ReverbProcessor);
+registerProcessor('growlingbass-processor', GrowlingBassProcessor);

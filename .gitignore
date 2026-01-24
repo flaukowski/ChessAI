@@ -41,3 +41,10 @@ Thumbs.db
 # Claude Code local files
 .claude-user/
 .claude/settings.local.json
+
+# Agentic QE files
+.agentic-qe/
+
+# Temporary files
+tmp/
+.tmp/

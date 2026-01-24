@@ -273,3 +273,399 @@ export type InsertAIEffectConversation = z.infer<typeof insertAIEffectConversati
 export type AIEffectMessage = typeof aiEffectMessages.$inferSelect;
 export type InsertAIEffectMessage = z.infer<typeof insertAIEffectMessageSchema>;
 export type UserSoundPreferences = typeof userSoundPreferences.$inferSelect;
+
+// ============================================================================
+// PHASE 1: Security & Foundation
+// ============================================================================
+
+// Encrypted API Keys - secure storage for user API keys
+export const encryptedApiKeys = pgTable("encrypted_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  provider: text("provider").notNull(), // openai, anthropic, custom
+  keyHash: text("key_hash").notNull(), // SHA-256 hash for lookup
+  encryptedKey: text("encrypted_key").notNull(), // AES-256-GCM encrypted (iv:authTag:encrypted)
+  label: text("label"), // User-friendly name
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// GDPR Consent tracking
+export const gdprConsent = pgTable("gdpr_consent", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  consentType: text("consent_type").notNull(), // terms, privacy, marketing, analytics
+  granted: boolean("granted").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  consentedAt: timestamp("consented_at").notNull().default(sql`now()`),
+  withdrawnAt: timestamp("withdrawn_at"),
+});
+
+// GDPR Data Export Requests
+export const gdprExportRequests = pgTable("gdpr_export_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed, expired
+  downloadUrl: text("download_url"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at"),
+});
+
+// GDPR Deletion Requests
+export const gdprDeletionRequests = pgTable("gdpr_deletion_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, processing, completed
+  reason: text("reason"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  scheduledDeletionAt: timestamp("scheduled_deletion_at"),
+  completedAt: timestamp("completed_at"),
+});
+
+// ============================================================================
+// PHASE 2: Monetization (Stripe)
+// ============================================================================
+
+// Subscription tiers enum-like values
+export const SUBSCRIPTION_TIERS = {
+  free: "free",
+  pro: "pro",
+  studio: "studio",
+} as const;
+
+export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[keyof typeof SUBSCRIPTION_TIERS];
+
+// Subscriptions - Stripe subscription tracking
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  tier: varchar("tier", { length: 20 }).notNull().default("free"), // free, pro, studio
+  status: varchar("status", { length: 20 }).notNull().default("active"), // active, canceled, past_due, trialing
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
+  trialEndsAt: timestamp("trial_ends_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Usage records for metered billing and tier limits
+export const usageRecords = pgTable("usage_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  usageType: text("usage_type").notNull(), // recordings, storage_bytes, ai_requests, effects_used
+  quantity: integer("quantity").notNull().default(0),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Payment history
+export const paymentHistory = pgTable("payment_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeInvoiceId: text("stripe_invoice_id"),
+  amount: integer("amount").notNull(), // in cents
+  currency: varchar("currency", { length: 3 }).notNull().default("usd"),
+  status: varchar("status", { length: 20 }).notNull(), // succeeded, failed, pending, refunded
+  description: text("description"),
+  receiptUrl: text("receipt_url"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ============================================================================
+// PHASE 3: Team Workspaces & RBAC
+// ============================================================================
+
+// Workspace roles enum
+export const WORKSPACE_ROLES = {
+  admin: "admin",
+  editor: "editor",
+  viewer: "viewer",
+} as const;
+
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[keyof typeof WORKSPACE_ROLES];
+
+// Workspaces - Team containers
+export const workspaces = pgTable("workspaces", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  ownerId: varchar("owner_id").references(() => users.id).notNull(),
+  logoUrl: text("logo_url"),
+  settings: jsonb("settings"), // workspace-specific settings
+  subscriptionId: varchar("subscription_id").references(() => subscriptions.id),
+  maxMembers: integer("max_members").default(5),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Workspace members - membership with roles
+export const workspaceMembers = pgTable("workspace_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("viewer"), // admin, editor, viewer
+  joinedAt: timestamp("joined_at").notNull().default(sql`now()`),
+});
+
+// Workspace invites - pending invitations
+export const workspaceInvites = pgTable("workspace_invites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
+  email: text("email").notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("viewer"),
+  token: text("token").notNull().unique(),
+  invitedBy: varchar("invited_by").references(() => users.id).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Workspace recordings - link recordings to workspaces
+export const workspaceRecordings = pgTable("workspace_recordings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
+  recordingId: varchar("recording_id").references(() => recordings.id).notNull(),
+  addedBy: varchar("added_by").references(() => users.id).notNull(),
+  addedAt: timestamp("added_at").notNull().default(sql`now()`),
+});
+
+// ============================================================================
+// PHASE 4: Social & Community Features
+// ============================================================================
+
+// User profiles - public profile info
+export const userProfiles = pgTable("user_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  displayName: text("display_name"),
+  bio: text("bio"),
+  avatarUrl: text("avatar_url"),
+  websiteUrl: text("website_url"),
+  twitterHandle: text("twitter_handle"),
+  instagramHandle: text("instagram_handle"),
+  youtubeChannel: text("youtube_channel"),
+  soundcloudUrl: text("soundcloud_url"),
+  location: text("location"),
+  isPublic: boolean("is_public").notNull().default(true),
+  followerCount: integer("follower_count").notNull().default(0),
+  followingCount: integer("following_count").notNull().default(0),
+  recordingCount: integer("recording_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Follows - follower relationships
+export const follows = pgTable("follows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  followerId: varchar("follower_id").references(() => users.id).notNull(),
+  followingId: varchar("following_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Recording likes
+export const recordingLikes = pgTable("recording_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recordingId: varchar("recording_id").references(() => recordings.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Recording comments - threaded comments
+export const recordingComments = pgTable("recording_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recordingId: varchar("recording_id").references(() => recordings.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  parentId: varchar("parent_id"), // For threaded replies
+  content: text("content").notNull(),
+  isEdited: boolean("is_edited").notNull().default(false),
+  likeCount: integer("like_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Comment likes
+export const commentLikes = pgTable("comment_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id").references(() => recordingComments.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Notifications
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // follow, like, comment, mention, workspace_invite
+  actorId: varchar("actor_id").references(() => users.id),
+  resourceType: text("resource_type"), // recording, comment, workspace
+  resourceId: varchar("resource_id"),
+  message: text("message"),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ============================================================================
+// PHASE 5: Analytics & Admin
+// ============================================================================
+
+// Analytics events - for tracking user behavior
+export const analyticsEvents = pgTable("analytics_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  sessionId: text("session_id"),
+  eventType: text("event_type").notNull(), // page_view, effect_used, recording_created, etc.
+  eventData: jsonb("event_data"), // event-specific data
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  referrer: text("referrer"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Feature flags - for gradual rollouts
+export const featureFlags = pgTable("feature_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  enabledForTiers: text("enabled_for_tiers").array(), // which subscription tiers have access
+  enabledForUsers: text("enabled_for_users").array(), // specific user IDs for beta testing
+  rolloutPercentage: integer("rollout_percentage").default(0), // 0-100 for gradual rollout
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Admin activity logs
+export const adminLogs = pgTable("admin_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminId: varchar("admin_id").references(() => users.id).notNull(),
+  action: text("action").notNull(),
+  targetType: text("target_type"), // user, subscription, workspace, feature_flag
+  targetId: varchar("target_id"),
+  details: jsonb("details"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ============================================================================
+// Zod Schemas for new tables
+// ============================================================================
+
+// Encrypted API Keys
+export const insertEncryptedApiKeySchema = z.object({
+  provider: z.enum(["openai", "anthropic", "custom"]),
+  keyHash: z.string(),
+  encryptedKey: z.string(),
+  label: z.string().max(100).optional(),
+});
+
+// GDPR Consent
+export const insertGdprConsentSchema = z.object({
+  consentType: z.enum(["terms", "privacy", "marketing", "analytics"]),
+  granted: z.boolean(),
+});
+
+// Subscriptions
+export const insertSubscriptionSchema = z.object({
+  stripeCustomerId: z.string(),
+  stripeSubscriptionId: z.string().optional(),
+  stripePriceId: z.string().optional(),
+  tier: z.enum(["free", "pro", "studio"]).default("free"),
+  status: z.enum(["active", "canceled", "past_due", "trialing"]).default("active"),
+});
+
+// Workspaces
+export const insertWorkspaceSchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
+  description: z.string().max(500).optional(),
+  logoUrl: z.string().url().optional(),
+  settings: z.record(z.any()).optional(),
+});
+
+export const updateWorkspaceSchema = insertWorkspaceSchema.partial();
+
+// Workspace invites
+export const insertWorkspaceInviteSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(["admin", "editor", "viewer"]).default("viewer"),
+});
+
+// User profiles
+export const insertUserProfileSchema = z.object({
+  displayName: z.string().max(100).optional(),
+  bio: z.string().max(500).optional(),
+  avatarUrl: z.string().url().optional(),
+  websiteUrl: z.string().url().optional(),
+  twitterHandle: z.string().max(50).optional(),
+  instagramHandle: z.string().max(50).optional(),
+  youtubeChannel: z.string().url().optional(),
+  soundcloudUrl: z.string().url().optional(),
+  location: z.string().max(100).optional(),
+  isPublic: z.boolean().default(true),
+});
+
+export const updateUserProfileSchema = insertUserProfileSchema.partial();
+
+// Comments
+export const insertCommentSchema = z.object({
+  content: z.string().min(1).max(2000),
+  parentId: z.string().optional(),
+});
+
+export const updateCommentSchema = z.object({
+  content: z.string().min(1).max(2000),
+});
+
+// Analytics events
+export const insertAnalyticsEventSchema = z.object({
+  eventType: z.string(),
+  eventData: z.record(z.any()).optional(),
+  sessionId: z.string().optional(),
+});
+
+// ============================================================================
+// Type exports for new tables
+// ============================================================================
+
+export type EncryptedApiKey = typeof encryptedApiKeys.$inferSelect;
+export type InsertEncryptedApiKey = z.infer<typeof insertEncryptedApiKeySchema>;
+export type GdprConsent = typeof gdprConsent.$inferSelect;
+export type InsertGdprConsent = z.infer<typeof insertGdprConsentSchema>;
+export type GdprExportRequest = typeof gdprExportRequests.$inferSelect;
+export type GdprDeletionRequest = typeof gdprDeletionRequests.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type UsageRecord = typeof usageRecords.$inferSelect;
+export type PaymentHistory = typeof paymentHistory.$inferSelect;
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
+export type UpdateWorkspace = z.infer<typeof updateWorkspaceSchema>;
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
+export type InsertWorkspaceInvite = z.infer<typeof insertWorkspaceInviteSchema>;
+export type WorkspaceRecording = typeof workspaceRecordings.$inferSelect;
+export type UserProfile = typeof userProfiles.$inferSelect;
+export type InsertUserProfile = z.infer<typeof insertUserProfileSchema>;
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
+export type Follow = typeof follows.$inferSelect;
+export type RecordingLike = typeof recordingLikes.$inferSelect;
+export type RecordingComment = typeof recordingComments.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type UpdateComment = z.infer<typeof updateCommentSchema>;
+export type CommentLike = typeof commentLikes.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;
+export type InsertAnalyticsEvent = z.infer<typeof insertAnalyticsEventSchema>;
+export type FeatureFlag = typeof featureFlags.$inferSelect;
+export type AdminLog = typeof adminLogs.$inferSelect;

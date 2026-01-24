@@ -339,6 +339,32 @@ const builtInEffects: RegisteredEffect[] = [
     factory: (ctx) => createWorkletEffect(ctx, 'basspurr'),
     defaultParams: defaultWorkletParams.basspurr,
   },
+  {
+    metadata: {
+      id: 'growlingbass',
+      name: 'Growling Bass',
+      description: 'Growling/purring bass with octave-down subharmonic and filtered harmonic distortion',
+      category: 'distortion',
+      color: '#dc2626',
+      tags: ['bass', 'subharmonic', 'octave', 'growl', 'harmonics'],
+      parameters: [
+        { name: 'subLevel', label: 'Sub Level', type: 'slider', min: 0, max: 1, step: 0.01, default: 0.5 },
+        { name: 'oddLevel', label: 'Odd Harmonics', type: 'slider', min: 0, max: 1, step: 0.01, default: 0.3 },
+        { name: 'evenLevel', label: 'Even Harmonics', type: 'slider', min: 0, max: 1, step: 0.01, default: 0.3 },
+        { name: 'toneFreq', label: 'Tone', type: 'slider', min: 100, max: 4000, step: 10, default: 800, unit: 'Hz' },
+        { name: 'mix', label: 'Mix', type: 'slider', min: 0, max: 1, step: 0.01, default: 1 },
+      ],
+      presets: [
+        { name: 'Subtle Growl', values: { subLevel: 0.3, oddLevel: 0.2, evenLevel: 0.1, toneFreq: 600 } },
+        { name: 'Heavy Purr', values: { subLevel: 0.6, oddLevel: 0.4, evenLevel: 0.3, toneFreq: 800 } },
+        { name: 'Octave Down', values: { subLevel: 0.8, oddLevel: 0, evenLevel: 0, toneFreq: 400 } },
+        { name: 'Aggressive', values: { subLevel: 0.5, oddLevel: 0.7, evenLevel: 0.5, toneFreq: 1200 } },
+        { name: 'Synth Bass', values: { subLevel: 0.7, oddLevel: 0.3, evenLevel: 0.6, toneFreq: 1500 } },
+      ],
+    },
+    factory: (ctx) => createWorkletEffect(ctx, 'growlingbass'),
+    defaultParams: defaultWorkletParams.growlingbass,
+  },
 ];
 
 // Register all built-in effects

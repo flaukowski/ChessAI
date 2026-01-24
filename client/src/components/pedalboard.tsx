@@ -190,6 +190,19 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
   },
+  growlingbass: {
+    label: 'Growling Bass',
+    icon: <Guitar className="w-4 h-4" />,
+    color: 'from-red-600 to-orange-500',
+    description: 'Octave-down subharmonic with filtered harmonic distortion',
+    params: [
+      { key: 'subLevel', label: 'Sub', min: 0, max: 1, step: 0.05 },
+      { key: 'oddLevel', label: 'Odd', min: 0, max: 1, step: 0.05 },
+      { key: 'evenLevel', label: 'Even', min: 0, max: 1, step: 0.05 },
+      { key: 'toneFreq', label: 'Tone', min: 100, max: 4000, step: 50, unit: 'Hz' },
+      { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
+    ],
+  },
 };
 
 // Extended distortion modes including new waveshaper primitives from AudioNoise PR #64
@@ -205,6 +218,7 @@ const gradientToKnobColor: Record<string, string> = {
   'from-amber-500 to-yellow-500': 'orange',
   'from-rose-500 to-pink-500': 'pink',
   'from-cyan-500 to-blue-500': 'cyan',
+  'from-red-600 to-orange-500': 'orange',
 };
 
 const TREMOLO_WAVEFORMS = ['Sine', 'Triangle'];

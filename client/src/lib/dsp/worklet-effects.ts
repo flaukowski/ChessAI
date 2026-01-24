@@ -72,7 +72,14 @@ export interface ReverbParams {
   width: number;       // 0 to 1 - stereo spread
 }
 
-export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams | ReverbParams;
+export interface GrowlingBassParams {
+  subLevel: number;    // 0 to 1 - subharmonic (octave down) level
+  oddLevel: number;    // 0 to 1 - odd harmonics (3rd) level
+  evenLevel: number;   // 0 to 1 - even harmonics (2nd) level
+  toneFreq: number;    // 100 to 4000 Hz - tone filter cutoff frequency
+}
+
+export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams | ReverbParams | GrowlingBassParams;
 
 let workletLoaded = false;
 const workletLoadingMap = new WeakMap<AudioWorklet, Promise<void>>();
@@ -596,9 +603,64 @@ export class ReverbEffect extends WorkletEffect {
 }
 
 /**
+ * GrowlingBass Effect
+ * Growling/purring bass with subharmonic generation and harmonic distortion
+ * Ported from C implementation by Philippe Strauss
+ *
+ * Features:
+ * - Minus one octave subharmonic (octave down effect)
+ * - Odd harmonics via hard clipping with envelope following
+ * - Even harmonics via full-wave rectification
+ * - Tunable tone control (lowpass filter on harmonics)
+ */
+export class GrowlingBassEffect extends WorkletEffect {
+  private _params: GrowlingBassParams = {
+    subLevel: 0.5,
+    oddLevel: 0.3,
+    evenLevel: 0.3,
+    toneFreq: 800,
+  };
+
+  constructor(context: AudioContext) {
+    super(context, 'growlingbass-processor');
+  }
+
+  get params(): GrowlingBassParams {
+    return { ...this._params };
+  }
+
+  setSubLevel(value: number): void {
+    this._params.subLevel = Math.max(0, Math.min(1, value));
+    this.setParam('subLevel', this._params.subLevel);
+  }
+
+  setOddLevel(value: number): void {
+    this._params.oddLevel = Math.max(0, Math.min(1, value));
+    this.setParam('oddLevel', this._params.oddLevel);
+  }
+
+  setEvenLevel(value: number): void {
+    this._params.evenLevel = Math.max(0, Math.min(1, value));
+    this.setParam('evenLevel', this._params.evenLevel);
+  }
+
+  setToneFreq(value: number): void {
+    this._params.toneFreq = Math.max(100, Math.min(4000, value));
+    this.setParam('toneFreq', this._params.toneFreq);
+  }
+
+  setAllParams(params: Partial<GrowlingBassParams>): void {
+    if (params.subLevel !== undefined) this.setSubLevel(params.subLevel);
+    if (params.oddLevel !== undefined) this.setOddLevel(params.oddLevel);
+    if (params.evenLevel !== undefined) this.setEvenLevel(params.evenLevel);
+    if (params.toneFreq !== undefined) this.setToneFreq(params.toneFreq);
+  }
+}
+
+/**
  * Effect type enum for the factory
  */
-export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo' | 'reverb';
+export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo' | 'reverb' | 'growlingbass';
 
 /**
  * Default parameters for each effect type
@@ -663,6 +725,13 @@ export const defaultWorkletParams: Record<WorkletEffectType, Record<string, numb
     width: 0.8,
     mix: 0.3,
   },
+  growlingbass: {
+    subLevel: 0.5,
+    oddLevel: 0.3,
+    evenLevel: 0.3,
+    toneFreq: 800,
+    mix: 1,
+  },
 };
 
 /**
@@ -689,6 +758,8 @@ export function createWorkletEffect(
       return new TremoloEffect(context);
     case 'reverb':
       return new ReverbEffect(context);
+    case 'growlingbass':
+      return new GrowlingBassEffect(context);
     default:
       throw new Error(`Unknown effect type: ${type}`);
   }
