@@ -1,0 +1,150 @@
+name: frontend-commercial-features
+description: Implement all commercial frontend features to match backend capabilities
+
+coordinator:
+  strategy: parallel-then-merge
+  max_concurrent: 4
+
+agents:
+  # Agent 1: Billing & Subscription UI
+  - id: billing-agent
+    role: frontend-developer
+    focus: billing-subscription-ui
+    tasks:
+      - name: create-pricing-page
+        description: Create /pricing page with tier comparison (Free/Pro/Studio)
+        files:
+          - client/src/pages/pricing.tsx
+        dependencies: []
+
+      - name: create-billing-page
+        description: Create /billing page for subscription management
+        files:
+          - client/src/pages/billing.tsx
+        dependencies: [create-pricing-page]
+
+      - name: create-subscription-components
+        description: Create billing UI components
+        files:
+          - client/src/components/billing/subscription-card.tsx
+          - client/src/components/billing/upgrade-modal.tsx
+          - client/src/components/billing/usage-display.tsx
+        dependencies: []
+
+  # Agent 2: Workspace UI
+  - id: workspace-agent
+    role: frontend-developer
+    focus: workspace-team-ui
+    tasks:
+      - name: create-workspaces-page
+        description: Create /workspaces page listing user workspaces
+        files:
+          - client/src/pages/workspaces.tsx
+        dependencies: []
+
+      - name: create-workspace-detail-page
+        description: Create /workspaces/:id detail page
+        files:
+          - client/src/pages/workspace-detail.tsx
+        dependencies: [create-workspaces-page]
+
+      - name: create-workspace-components
+        description: Create workspace UI components
+        files:
+          - client/src/components/workspace/workspace-selector.tsx
+          - client/src/components/workspace/member-list.tsx
+          - client/src/components/workspace/invite-modal.tsx
+          - client/src/components/workspace/role-badge.tsx
+        dependencies: []
+
+  # Agent 3: Social Features UI
+  - id: social-agent
+    role: frontend-developer
+    focus: social-profile-ui
+    tasks:
+      - name: create-profile-page
+        description: Create /profile page for own profile editing
+        files:
+          - client/src/pages/profile.tsx
+        dependencies: []
+
+      - name: create-public-profile-page
+        description: Create /u/:username public profile page
+        files:
+          - client/src/pages/user-profile.tsx
+        dependencies: [create-profile-page]
+
+      - name: create-social-components
+        description: Create social UI components
+        files:
+          - client/src/components/social/follow-button.tsx
+          - client/src/components/social/like-button.tsx
+          - client/src/components/social/comments-section.tsx
+          - client/src/components/social/notification-bell.tsx
+          - client/src/components/social/user-avatar.tsx
+        dependencies: []
+
+  # Agent 4: Settings & Admin UI
+  - id: settings-agent
+    role: frontend-developer
+    focus: settings-admin-ui
+    tasks:
+      - name: create-settings-page
+        description: Create /settings page with GDPR controls
+        files:
+          - client/src/pages/settings.tsx
+        dependencies: []
+
+      - name: create-admin-dashboard
+        description: Create /admin dashboard page
+        files:
+          - client/src/pages/admin/dashboard.tsx
+          - client/src/pages/admin/users.tsx
+          - client/src/pages/admin/subscriptions.tsx
+        dependencies: []
+
+      - name: create-settings-components
+        description: Create settings/admin components
+        files:
+          - client/src/components/settings/gdpr-controls.tsx
+          - client/src/components/settings/api-key-manager.tsx
+          - client/src/components/admin/stats-card.tsx
+          - client/src/components/admin/user-table.tsx
+        dependencies: []
+
+  # Agent 5: Integration & Router Update
+  - id: integration-agent
+    role: frontend-developer
+    focus: integration
+    tasks:
+      - name: update-router
+        description: Update App.tsx with all new routes
+        files:
+          - client/src/App.tsx
+        dependencies:
+          - billing-agent:create-pricing-page
+          - billing-agent:create-billing-page
+          - workspace-agent:create-workspaces-page
+          - workspace-agent:create-workspace-detail-page
+          - social-agent:create-profile-page
+          - social-agent:create-public-profile-page
+          - settings-agent:create-settings-page
+          - settings-agent:create-admin-dashboard
+
+      - name: create-api-hooks
+        description: Create React hooks for all new APIs
+        files:
+          - client/src/hooks/use-billing.ts
+          - client/src/hooks/use-workspaces.ts
+          - client/src/hooks/use-social.ts
+          - client/src/hooks/use-admin.ts
+        dependencies: []
+
+quality_gates:
+  - typescript-check
+  - no-console-errors
+  - responsive-design
+
+output:
+  summary: true
+  diff: true
