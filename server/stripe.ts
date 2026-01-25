@@ -16,10 +16,22 @@ import {
 } from '../shared/schema';
 import { TIER_LIMITS, TierName } from '../shared/tiers';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+// Initialize Stripe only if API key is provided
+const stripeApiKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeApiKey ? new Stripe(stripeApiKey) : null;
 
 const router = Router();
+
+// Middleware to ensure Stripe is configured
+const requireStripe = (_req: Request, res: Response, next: Function) => {
+  if (!stripe) {
+    return res.status(503).json({ 
+      error: 'Stripe not configured',
+      message: 'Payment processing is not available. Please configure STRIPE_SECRET_KEY.'
+    });
+  }
+  next();
+};
 
 // Middleware to ensure user is authenticated
 const requireAuth = (req: Request, res: Response, next: Function) => {
@@ -33,6 +45,10 @@ const requireAuth = (req: Request, res: Response, next: Function) => {
  * Get or create Stripe customer for user
  */
 async function getOrCreateCustomer(userId: string, email: string): Promise<string> {
+  if (!stripe) {
+    throw new Error('Stripe not configured');
+  }
+
   // Check for existing subscription with customer ID
   const [existingSub] = await db
     .select()
@@ -88,7 +104,7 @@ router.get('/subscription', requireAuth, async (req: Request, res: Response) => 
  * Create checkout session for subscription
  * POST /api/v1/billing/checkout
  */
-router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
+router.post('/checkout', requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any).id;
     const userEmail = (req.user as any).email;
@@ -106,7 +122,7 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
     const customerId = await getOrCreateCustomer(userId, userEmail);
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripe!.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -152,7 +168,7 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
  * Create customer portal session for managing subscription
  * POST /api/v1/billing/portal
  */
-router.post('/portal', requireAuth, async (req: Request, res: Response) => {
+router.post('/portal', requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any).id;
     const { returnUrl } = req.body;
@@ -166,7 +182,7 @@ router.post('/portal', requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No billing account found' });
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await stripe!.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
       return_url: returnUrl || `${process.env.APP_URL}/billing`,
     });
@@ -248,7 +264,7 @@ router.get('/usage', requireAuth, async (req: Request, res: Response) => {
  * Cancel subscription
  * POST /api/v1/billing/cancel
  */
-router.post('/cancel', requireAuth, async (req: Request, res: Response) => {
+router.post('/cancel', requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any).id;
     const { immediately } = req.body;
@@ -264,10 +280,10 @@ router.post('/cancel', requireAuth, async (req: Request, res: Response) => {
 
     if (immediately) {
       // Cancel immediately
-      await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
+      await stripe!.subscriptions.cancel(subscription.stripeSubscriptionId);
     } else {
       // Cancel at period end
-      await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      await stripe!.subscriptions.update(subscription.stripeSubscriptionId, {
         cancel_at_period_end: true,
       });
     }
@@ -304,7 +320,7 @@ router.post('/cancel', requireAuth, async (req: Request, res: Response) => {
  * Reactivate canceled subscription
  * POST /api/v1/billing/reactivate
  */
-router.post('/reactivate', requireAuth, async (req: Request, res: Response) => {
+router.post('/reactivate', requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = (req.user as any).id;
 
@@ -322,7 +338,7 @@ router.post('/reactivate', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Reactivate
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+    await stripe!.subscriptions.update(subscription.stripeSubscriptionId, {
       cancel_at_period_end: false,
     });
 
@@ -363,6 +379,11 @@ router.post('/webhook', async (req: Request, res: Response) => {
   if (!webhookSecret) {
     console.error('[Stripe] Webhook secret not configured');
     return res.status(500).send('Webhook secret not configured');
+  }
+
+  if (!stripe) {
+    console.error('[Stripe] Stripe not configured');
+    return res.status(500).send('Stripe not configured');
   }
 
   let event: Stripe.Event;
