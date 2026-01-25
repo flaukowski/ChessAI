@@ -142,6 +142,15 @@ export class MockAnalyserNode extends MockAudioNode {
   getFloatFrequencyData = vi.fn();
 }
 
+export class MockConvolverNode extends MockAudioNode {
+  buffer: AudioBuffer | null = null;
+  normalize: boolean = true;
+
+  constructor(context: MockAudioContext) {
+    super(context);
+  }
+}
+
 export class MockAudioDestinationNode extends MockAudioNode {
   maxChannelCount: number = 2;
 
@@ -207,6 +216,7 @@ export class MockAudioContext {
   createDynamicsCompressor = vi.fn(() => new MockDynamicsCompressorNode(this));
   createWaveShaper = vi.fn(() => new MockWaveShaperNode(this));
   createAnalyser = vi.fn(() => new MockAnalyserNode(this));
+  createConvolver = vi.fn(() => new MockConvolverNode(this));
   createMediaStreamSource = vi.fn((stream: MediaStream) => new MockMediaStreamAudioSourceNode(this, { mediaStream: stream }));
   createBuffer = vi.fn((numberOfChannels: number, length: number, sampleRate: number) => ({
     numberOfChannels,
@@ -276,6 +286,8 @@ export function setupAudioContextMock(): void {
   // @ts-ignore
   global.AnalyserNode = MockAnalyserNode;
   // @ts-ignore
+  global.ConvolverNode = MockConvolverNode;
+  // @ts-ignore
   global.AudioWorkletNode = MockAudioWorkletNode;
 }
 
@@ -299,6 +311,8 @@ export function cleanupAudioContextMock(): void {
   delete global.WaveShaperNode;
   // @ts-ignore
   delete global.AnalyserNode;
+  // @ts-ignore
+  delete global.ConvolverNode;
   // @ts-ignore
   delete global.AudioWorkletNode;
 }

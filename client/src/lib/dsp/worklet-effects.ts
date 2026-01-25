@@ -79,7 +79,18 @@ export interface GrowlingBassParams {
   toneFreq: number;    // 100 to 4000 Hz - tone filter cutoff frequency
 }
 
-export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams | ReverbParams | GrowlingBassParams;
+export interface GateParams {
+  threshold: number;   // -60 to 0 dB - gate threshold
+  attack: number;      // 0.1 to 50 ms - attack time
+  hold: number;        // 0 to 500 ms - hold time
+  release: number;     // 5 to 1000 ms - release time
+  range: number;       // -80 to 0 dB - maximum attenuation (depth)
+  ratio: number;       // 1 to 100 - expansion ratio (100 = hard gate)
+  hpfFreq: number;     // 20 to 500 Hz - sidechain HPF frequency
+  hpfEnabled: boolean; // enable sidechain HPF
+}
+
+export type EffectParams = EQParams | DistortionParams | DelayParams | ChorusParams | CompressorParams | BassPurrParams | TremoloParams | ReverbParams | GrowlingBassParams | GateParams;
 
 let workletLoaded = false;
 const workletLoadingMap = new WeakMap<AudioWorklet, Promise<void>>();
@@ -658,9 +669,111 @@ export class GrowlingBassEffect extends WorkletEffect {
 }
 
 /**
+ * Gate/Expander Effect
+ * Noise gate with expander mode for dynamics control and noise reduction
+ * Features:
+ * - Adjustable threshold, attack, hold, and release times
+ * - Range control for maximum attenuation depth
+ * - Ratio control for soft expansion vs hard gating
+ * - Sidechain HPF to ignore low-frequency content in detection
+ * - Visual gain reduction metering via message port
+ */
+export class GateEffect extends WorkletEffect {
+  private _params: GateParams = {
+    threshold: -40,
+    attack: 1,
+    hold: 50,
+    release: 100,
+    range: -80,
+    ratio: 10,
+    hpfFreq: 80,
+    hpfEnabled: false,
+  };
+
+  private _onGainReduction: ((data: { gainReduction: number; gateState: string; envelope: number }) => void) | null = null;
+
+  constructor(context: AudioContext) {
+    super(context, 'gate-processor');
+    // Set up message port listener for gain reduction metering
+    this._node.port.onmessage = (event) => {
+      if (this._onGainReduction) {
+        this._onGainReduction(event.data);
+      }
+    };
+  }
+
+  get params(): GateParams {
+    return { ...this._params };
+  }
+
+  /**
+   * Subscribe to gain reduction updates for visual metering
+   */
+  onGainReduction(callback: (data: { gainReduction: number; gateState: string; envelope: number }) => void): void {
+    this._onGainReduction = callback;
+  }
+
+  setThreshold(threshold: number): void {
+    this._params.threshold = Math.max(-60, Math.min(0, threshold));
+    this.setParam('threshold', this._params.threshold);
+  }
+
+  setAttack(attack: number): void {
+    this._params.attack = Math.max(0.1, Math.min(50, attack));
+    this.setParam('attack', this._params.attack);
+  }
+
+  setHold(hold: number): void {
+    this._params.hold = Math.max(0, Math.min(500, hold));
+    this.setParam('hold', this._params.hold);
+  }
+
+  setRelease(release: number): void {
+    this._params.release = Math.max(5, Math.min(1000, release));
+    this.setParam('release', this._params.release);
+  }
+
+  setRange(range: number): void {
+    this._params.range = Math.max(-80, Math.min(0, range));
+    this.setParam('range', this._params.range);
+  }
+
+  setRatio(ratio: number): void {
+    this._params.ratio = Math.max(1, Math.min(100, ratio));
+    this.setParam('ratio', this._params.ratio);
+  }
+
+  setHpfFreq(freq: number): void {
+    this._params.hpfFreq = Math.max(20, Math.min(500, freq));
+    this.setParam('hpfFreq', this._params.hpfFreq);
+  }
+
+  setHpfEnabled(enabled: boolean): void {
+    this._params.hpfEnabled = enabled;
+    this.setParam('hpfEnabled', enabled ? 1 : 0);
+  }
+
+  setAllParams(params: Partial<GateParams>): void {
+    if (params.threshold !== undefined) this.setThreshold(params.threshold);
+    if (params.attack !== undefined) this.setAttack(params.attack);
+    if (params.hold !== undefined) this.setHold(params.hold);
+    if (params.release !== undefined) this.setRelease(params.release);
+    if (params.range !== undefined) this.setRange(params.range);
+    if (params.ratio !== undefined) this.setRatio(params.ratio);
+    if (params.hpfFreq !== undefined) this.setHpfFreq(params.hpfFreq);
+    if (params.hpfEnabled !== undefined) this.setHpfEnabled(params.hpfEnabled);
+  }
+
+  destroy(): void {
+    this._onGainReduction = null;
+    super.destroy();
+  }
+}
+
+/**
  * Effect type enum for the factory
  */
-export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo' | 'reverb' | 'growlingbass';
+export type WorkletEffectType = 'eq' | 'distortion' | 'delay' | 'chorus' | 'compressor' | 'basspurr' | 'tremolo' | 'reverb' | 'growlingbass' | 'gate';
 
 /**
  * Default parameters for each effect type
@@ -732,6 +845,17 @@ export const defaultWorkletParams: Record<WorkletEffectType, Record<string, numb
     toneFreq: 800,
     mix: 1,
   },
+  gate: {
+    threshold: -40,
+    attack: 1,
+    hold: 50,
+    release: 100,
+    range: -80,
+    ratio: 10,
+    hpfFreq: 80,
+    hpfEnabled: 0,
+    mix: 1,
+  },
 };
 
 /**
@@ -760,6 +884,8 @@ export function createWorkletEffect(
       return new ReverbEffect(context);
     case 'growlingbass':
       return new GrowlingBassEffect(context);
+    case 'gate':
+      return new GateEffect(context);
     default:
       throw new Error(`Unknown effect type: ${type}`);
   }

@@ -6,3 +6,4 @@
 export * from './echo';
 export * from './flanger';
 export * from './phaser';
+export * from './convolution-reverb';

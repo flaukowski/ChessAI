@@ -1,6 +1,6 @@
 /**
  * AudioNoise Web - Pedalboard Component
- * Full-featured audio effects pedalboard with drag-and-drop, presets, and export
+ * Full-featured audio effects pedalboard with drag-and-drop, presets, export, and undo/redo
  */
 
 import { useState, useRef, useCallback, memo, useMemo } from 'react';
@@ -40,6 +40,8 @@ import {
   Volume2,
   VolumeX,
   Waves,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,6 +75,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { VirtualKnob } from '@/components/ui/virtual-knob';
 import { LevelMeter, DualLevelMeter } from '@/components/level-meter';
+import { UndoRedoControls } from '@/components/undo-redo-controls';
 import { type PedalboardEffect, type WorkletEffectType } from '@/hooks/use-pedalboard';
 
 // Effect configuration metadata
@@ -203,6 +206,22 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
       { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
     ],
   },
+  gate: {
+    label: 'Gate',
+    icon: <VolumeX className="w-4 h-4" />,
+    color: 'from-slate-500 to-gray-600',
+    description: 'Noise gate for controlling dynamics and eliminating unwanted noise',
+    params: [
+      { key: 'threshold', label: 'Threshold', min: -80, max: 0, step: 1, unit: 'dB' },
+      { key: 'attack', label: 'Attack', min: 0.1, max: 20, step: 0.1, unit: 'ms' },
+      { key: 'hold', label: 'Hold', min: 0, max: 500, step: 5, unit: 'ms' },
+      { key: 'release', label: 'Release', min: 10, max: 1000, step: 10, unit: 'ms' },
+      { key: 'range', label: 'Range', min: -80, max: 0, step: 1, unit: 'dB' },
+      { key: 'ratio', label: 'Ratio', min: 1, max: 20, step: 0.5 },
+      { key: 'hpfFreq', label: 'HPF Freq', min: 20, max: 500, step: 10, unit: 'Hz' },
+      { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.05 },
+    ],
+  },
 };
 
 // Extended distortion modes including new waveshaper primitives from AudioNoise PR #64
@@ -219,6 +238,7 @@ const gradientToKnobColor: Record<string, string> = {
   'from-rose-500 to-pink-500': 'pink',
   'from-cyan-500 to-blue-500': 'cyan',
   'from-red-600 to-orange-500': 'orange',
+  'from-slate-500 to-gray-600': 'gray',
 };
 
 const TREMOLO_WAVEFORMS = ['Sine', 'Triangle'];
@@ -413,6 +433,19 @@ const SortableEffectCard = memo(function SortableEffectCard({
   );
 });
 
+// Undo/Redo props interface
+interface UndoRedoProps {
+  canUndo: boolean;
+  canRedo: boolean;
+  undoDescription: string | null;
+  redoDescription: string | null;
+  undoHistory: Array<{ id: string; description: string; timestamp: number }>;
+  redoHistory: Array<{ id: string; description: string; timestamp: number }>;
+  onUndo: () => void;
+  onRedo: () => void;
+  onClearHistory?: () => void;
+}
+
 // Main Pedalboard Props
 interface PedalboardProps {
   effects: PedalboardEffect[];
@@ -439,6 +472,7 @@ interface PedalboardProps {
   onSetGlobalBypass: (bypass: boolean) => void;
   onExportPreset: () => string;
   onImportPreset: (json: string) => void;
+  undoRedo?: UndoRedoProps;
   className?: string;
 }
 
@@ -459,6 +493,7 @@ export const Pedalboard = memo(function Pedalboard({
   onSetGlobalBypass,
   onExportPreset,
   onImportPreset,
+  undoRedo,
   className,
 }: PedalboardProps) {
   const [selectedEffectType, setSelectedEffectType] = useState<WorkletEffectType>('eq');
@@ -587,6 +622,22 @@ export const Pedalboard = memo(function Pedalboard({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+
+              {/* Undo/Redo Controls */}
+              {undoRedo && (
+                <UndoRedoControls
+                  canUndo={undoRedo.canUndo}
+                  canRedo={undoRedo.canRedo}
+                  undoDescription={undoRedo.undoDescription}
+                  redoDescription={undoRedo.redoDescription}
+                  undoHistory={undoRedo.undoHistory}
+                  redoHistory={undoRedo.redoHistory}
+                  onUndo={undoRedo.onUndo}
+                  onRedo={undoRedo.onRedo}
+                  onClearHistory={undoRedo.onClearHistory}
+                  showHistoryDropdown={true}
+                />
+              )}
 
               {/* Preset Actions */}
               <div className="flex items-center gap-1">

@@ -1320,6 +1320,209 @@ class GrowlingBassProcessor extends AudioWorkletProcessor {
   }
 }
 
+/**
+ * Gate/Expander Processor
+ * Noise gate with expander mode for dynamics control
+ * Features: threshold, attack, hold, release, range (depth), ratio (expander), sidechain HPF
+ * Reports gain reduction for visual metering
+ */
+class GateProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'threshold', defaultValue: -40, minValue: -60, maxValue: 0 },      // dB
+      { name: 'attack', defaultValue: 1, minValue: 0.1, maxValue: 50 },          // ms
+      { name: 'hold', defaultValue: 50, minValue: 0, maxValue: 500 },            // ms
+      { name: 'release', defaultValue: 100, minValue: 5, maxValue: 1000 },       // ms
+      { name: 'range', defaultValue: -80, minValue: -80, maxValue: 0 },          // dB (max attenuation)
+      { name: 'ratio', defaultValue: 10, minValue: 1, maxValue: 100 },           // expansion ratio (100 = hard gate)
+      { name: 'hpfFreq', defaultValue: 80, minValue: 20, maxValue: 500 },        // sidechain HPF frequency
+      { name: 'hpfEnabled', defaultValue: 0, minValue: 0, maxValue: 1 },         // enable sidechain HPF
+      { name: 'bypass', defaultValue: 0, minValue: 0, maxValue: 1 },
+      { name: 'mix', defaultValue: 1, minValue: 0, maxValue: 1 },
+    ];
+  }
+
+  constructor() {
+    super();
+    // Envelope state
+    this.envelope = 0;
+    // Current gain (0 to 1)
+    this.currentGain = 1;
+    // Hold timer in samples
+    this.holdCounter = 0;
+    // Gate state: 'closed', 'opening', 'open', 'holding', 'closing'
+    this.gateState = 'closed';
+    // Sidechain HPF state (2nd order biquad) per channel
+    this.hpfState = [[0, 0, 0, 0], [0, 0, 0, 0]];
+    this.hpfCoeffs = { b0: 1, b1: 0, b2: 0, a1: 0, a2: 0 };
+    this.lastHpfFreq = 0;
+    // Gain reduction for metering (reported via message port)
+    this.gainReductionDb = 0;
+    this.frameCount = 0;
+    this.reportInterval = 2048; // Report every ~42ms at 48kHz
+  }
+
+  // Calculate HPF coefficients (2nd order Butterworth)
+  calcHpfCoeffs(fc) {
+    const w0 = TWO_PI * fc / sampleRate;
+    const cos_w0 = Math.cos(w0);
+    const sin_w0 = Math.sin(w0);
+    const alpha = sin_w0 / (2 * 0.707); // Q = 0.707 for Butterworth
+
+    const a0 = 1 + alpha;
+    this.hpfCoeffs.b0 = ((1 + cos_w0) / 2) / a0;
+    this.hpfCoeffs.b1 = (-(1 + cos_w0)) / a0;
+    this.hpfCoeffs.b2 = ((1 + cos_w0) / 2) / a0;
+    this.hpfCoeffs.a1 = (-2 * cos_w0) / a0;
+    this.hpfCoeffs.a2 = (1 - alpha) / a0;
+  }
+
+  // Biquad processing for sidechain HPF
+  processHpf(x, state) {
+    const y = this.hpfCoeffs.b0 * x + this.hpfCoeffs.b1 * state[0] + this.hpfCoeffs.b2 * state[1]
+            - this.hpfCoeffs.a1 * state[2] - this.hpfCoeffs.a2 * state[3];
+    state[1] = state[0];
+    state[0] = x;
+    state[3] = state[2];
+    state[2] = y;
+    return y;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    const output = outputs[0];
+
+    if (!input || !input[0]) return true;
+
+    const bypass = parameters.bypass[0] > 0.5;
+    const mix = parameters.mix[0];
+    const thresholdDb = parameters.threshold[0];
+    const attackMs = parameters.attack[0];
+    const holdMs = parameters.hold[0];
+    const releaseMs = parameters.release[0];
+    const rangeDb = parameters.range[0];
+    const ratio = parameters.ratio[0];
+    const hpfFreq = parameters.hpfFreq[0];
+    const hpfEnabled = parameters.hpfEnabled[0] > 0.5;
+
+    // Convert dB to linear
+    const threshold = Math.pow(10, thresholdDb / 20);
+    const rangeLinear = Math.pow(10, rangeDb / 20); // Minimum gain when gate is closed
+
+    // Calculate time constants
+    const attackCoeff = Math.exp(-1 / (attackMs * sampleRate / 1000));
+    const releaseCoeff = Math.exp(-1 / (releaseMs * sampleRate / 1000));
+    const holdSamples = Math.floor(holdMs * sampleRate / 1000);
+
+    // Update HPF coefficients if frequency changed
+    if (hpfEnabled && Math.abs(hpfFreq - this.lastHpfFreq) > 0.5) {
+      this.calcHpfCoeffs(hpfFreq);
+      this.lastHpfFreq = hpfFreq;
+    }
+
+    const numChannels = Math.min(input.length, output.length);
+    const blockSize = input[0].length;
+
+    for (let i = 0; i < blockSize; i++) {
+      // Calculate peak level across all channels (for sidechain detection)
+      let detectionLevel = 0;
+      for (let ch = 0; ch < numChannels; ch++) {
+        let sample = input[ch][i];
+
+        // Apply sidechain HPF if enabled (filter out low frequencies from detection)
+        if (hpfEnabled) {
+          sample = this.processHpf(sample, this.hpfState[ch]);
+        }
+
+        const absSample = Math.abs(sample);
+        if (absSample > detectionLevel) {
+          detectionLevel = absSample;
+        }
+      }
+
+      // Envelope follower (peak detection with release)
+      if (detectionLevel > this.envelope) {
+        // Fast attack for peak detection
+        this.envelope = detectionLevel;
+      } else {
+        // Slower release for smooth detection
+        this.envelope = releaseCoeff * this.envelope + (1 - releaseCoeff) * detectionLevel;
+      }
+
+      // Calculate target gain based on envelope vs threshold
+      let targetGain = 1;
+      if (this.envelope < threshold) {
+        // Below threshold - apply expansion/gating
+        if (ratio >= 100) {
+          // Hard gate mode
+          targetGain = rangeLinear;
+        } else {
+          // Expander mode: apply ratio-based expansion
+          const belowDb = 20 * Math.log10(Math.max(this.envelope / threshold, 1e-10));
+          const expansionDb = belowDb * (ratio - 1);
+          // Clamp to range
+          const clampedExpansionDb = Math.max(expansionDb, rangeDb);
+          targetGain = Math.pow(10, clampedExpansionDb / 20);
+        }
+      }
+
+      // Gate state machine with hold time
+      if (this.envelope >= threshold) {
+        // Signal above threshold - open the gate
+        this.gateState = 'open';
+        this.holdCounter = holdSamples;
+      } else if (this.holdCounter > 0) {
+        // In hold phase
+        this.gateState = 'holding';
+        this.holdCounter--;
+        targetGain = 1; // Keep gate open during hold
+      } else {
+        // Below threshold and hold expired - close the gate
+        this.gateState = 'closed';
+      }
+
+      // Smooth gain changes using attack/release
+      if (targetGain > this.currentGain) {
+        // Opening (attack)
+        this.currentGain = attackCoeff * this.currentGain + (1 - attackCoeff) * targetGain;
+      } else {
+        // Closing (release)
+        this.currentGain = releaseCoeff * this.currentGain + (1 - releaseCoeff) * targetGain;
+      }
+
+      // Calculate gain reduction in dB for metering
+      const grDb = 20 * Math.log10(Math.max(this.currentGain, 1e-10));
+      this.gainReductionDb = Math.min(this.gainReductionDb, grDb);
+
+      // Apply gain to all channels
+      for (let ch = 0; ch < numChannels; ch++) {
+        const dry = input[ch][i];
+
+        if (bypass) {
+          output[ch][i] = dry;
+        } else {
+          const wet = dry * this.currentGain;
+          output[ch][i] = dry * (1 - mix) + wet * mix;
+        }
+      }
+    }
+
+    // Report gain reduction periodically
+    this.frameCount += blockSize;
+    if (this.frameCount >= this.reportInterval) {
+      this.port.postMessage({
+        gainReduction: this.gainReductionDb,
+        gateState: this.gateState,
+        envelope: 20 * Math.log10(Math.max(this.envelope, 1e-10)),
+      });
+      this.gainReductionDb = 0; // Reset for next period
+      this.frameCount = 0;
+    }
+
+    return true;
+  }
+}
+
 // Register all processors
 registerProcessor('eq-processor', EQProcessor);
 registerProcessor('distortion-processor', DistortionProcessor);
@@ -1331,3 +1534,4 @@ registerProcessor('basspurr-processor', BassPurrProcessor);
 registerProcessor('tremolo-processor', TremoloProcessor);
 registerProcessor('reverb-processor', ReverbProcessor);
 registerProcessor('growlingbass-processor', GrowlingBassProcessor);
+registerProcessor('gate-processor', GateProcessor);

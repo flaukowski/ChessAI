@@ -5,6 +5,7 @@
  */
 
 import { createWorkletEffect, type WorkletEffectType, type EffectNode, defaultWorkletParams } from './worklet-effects';
+import { ConvolutionReverbEffect, ROOM_SIZE_MAP, type RoomSize } from './effects/convolution-reverb';
 
 export interface EffectParameter {
   name: string;
@@ -364,6 +365,102 @@ const builtInEffects: RegisteredEffect[] = [
     },
     factory: (ctx) => createWorkletEffect(ctx, 'growlingbass'),
     defaultParams: defaultWorkletParams.growlingbass,
+  },
+  {
+    metadata: {
+      id: 'convolution-reverb',
+      name: 'Convolution Reverb',
+      description: 'High-quality convolution reverb with synthetic impulse responses and room simulation',
+      category: 'time',
+      color: '#14b8a6',
+      tags: ['reverb', 'convolution', 'space', 'room', 'hall', 'IR'],
+      parameters: [
+        { name: 'wetDryMix', label: 'Mix', type: 'slider', min: 0, max: 1, step: 0.01, default: 0.3 },
+        { name: 'decay', label: 'Decay', type: 'slider', min: 0.1, max: 10, step: 0.1, default: 1.5, unit: 's' },
+        { name: 'preDelay', label: 'Pre-Delay', type: 'slider', min: 0, max: 100, step: 1, default: 10, unit: 'ms' },
+        { name: 'roomSize', label: 'Room Size', type: 'select', min: 0, max: 3, default: 1, options: [
+          { value: 0, label: 'Small' },
+          { value: 1, label: 'Medium' },
+          { value: 2, label: 'Large' },
+          { value: 3, label: 'Hall' },
+        ]},
+        { name: 'damping', label: 'Damping', type: 'slider', min: 0, max: 1, step: 0.01, default: 0.5 },
+      ],
+      presets: [
+        { name: 'Small Room', values: { wetDryMix: 0.25, decay: 0.5, preDelay: 5, roomSize: 0, damping: 0.6 } },
+        { name: 'Medium Room', values: { wetDryMix: 0.3, decay: 1.2, preDelay: 15, roomSize: 1, damping: 0.5 } },
+        { name: 'Large Room', values: { wetDryMix: 0.35, decay: 2.0, preDelay: 30, roomSize: 2, damping: 0.4 } },
+        { name: 'Concert Hall', values: { wetDryMix: 0.4, decay: 3.5, preDelay: 50, roomSize: 3, damping: 0.3 } },
+        { name: 'Cathedral', values: { wetDryMix: 0.45, decay: 6.0, preDelay: 80, roomSize: 3, damping: 0.2 } },
+        { name: 'Plate', values: { wetDryMix: 0.35, decay: 1.8, preDelay: 0, roomSize: 1, damping: 0.7 } },
+        { name: 'Ambient Wash', values: { wetDryMix: 0.6, decay: 5.0, preDelay: 40, roomSize: 3, damping: 0.15 } },
+      ],
+    },
+    factory: (ctx) => {
+      const effect = new ConvolutionReverbEffect(ctx);
+      // Create an adapter that handles roomSize conversion from number to string
+      return {
+        get input() { return effect.input; },
+        get output() { return effect.output; },
+        get bypass() { return effect.bypass; },
+        get mix() { return effect.mix; },
+        setBypass(bypass: boolean) { effect.setBypass(bypass); },
+        setMix(mix: number) { effect.setMix(mix); },
+        destroy() { effect.destroy(); },
+        // Expose setAllParams for the pedalboard engine
+        setAllParams(params: Record<string, number>) {
+          if (params.wetDryMix !== undefined) effect.setWetDryMix(params.wetDryMix);
+          if (params.mix !== undefined) effect.setMix(params.mix);
+          if (params.decay !== undefined) effect.setDecay(params.decay);
+          if (params.preDelay !== undefined) effect.setPreDelay(params.preDelay);
+          if (params.damping !== undefined) effect.setDamping(params.damping);
+          if (params.roomSize !== undefined) {
+            const roomSizeValue = Math.round(params.roomSize);
+            const roomSizeName = ROOM_SIZE_MAP[roomSizeValue] || 'medium';
+            effect.setRoomSize(roomSizeName as RoomSize);
+          }
+        },
+      } as EffectNode & { setAllParams: (params: Record<string, number>) => void };
+    },
+    defaultParams: {
+      wetDryMix: 0.3,
+      decay: 1.5,
+      preDelay: 10,
+      roomSize: 1,
+      damping: 0.5,
+      mix: 0.3,
+    },
+  },
+  {
+    metadata: {
+      id: 'gate',
+      name: 'Gate/Expander',
+      description: 'Noise gate with expander mode for dynamics control and noise reduction',
+      category: 'dynamics',
+      color: '#0d9488',
+      tags: ['gate', 'expander', 'dynamics', 'noise reduction', 'threshold'],
+      parameters: [
+        { name: 'threshold', label: 'Threshold', type: 'slider', min: -60, max: 0, step: 0.5, default: -40, unit: 'dB' },
+        { name: 'attack', label: 'Attack', type: 'slider', min: 0.1, max: 50, step: 0.1, default: 1, unit: 'ms' },
+        { name: 'hold', label: 'Hold', type: 'slider', min: 0, max: 500, step: 1, default: 50, unit: 'ms' },
+        { name: 'release', label: 'Release', type: 'slider', min: 5, max: 1000, step: 1, default: 100, unit: 'ms' },
+        { name: 'range', label: 'Range', type: 'slider', min: -80, max: 0, step: 1, default: -80, unit: 'dB' },
+        { name: 'ratio', label: 'Ratio', type: 'slider', min: 1, max: 100, step: 1, default: 10 },
+        { name: 'hpfFreq', label: 'HPF Freq', type: 'slider', min: 20, max: 500, step: 1, default: 80, unit: 'Hz' },
+        { name: 'hpfEnabled', label: 'HPF On', type: 'toggle', min: 0, max: 1, default: 0 },
+        { name: 'mix', label: 'Mix', type: 'slider', min: 0, max: 1, step: 0.01, default: 1 },
+      ],
+      presets: [
+        { name: 'Gentle Gate', values: { threshold: -45, attack: 5, hold: 100, release: 200, range: -40, ratio: 4 } },
+        { name: 'Tight Gate', values: { threshold: -35, attack: 0.5, hold: 20, release: 50, range: -80, ratio: 100 } },
+        { name: 'Drum Gate', values: { threshold: -30, attack: 0.1, hold: 50, release: 100, range: -80, ratio: 100, hpfFreq: 100, hpfEnabled: 1 } },
+        { name: 'Vocal Gate', values: { threshold: -40, attack: 2, hold: 150, release: 300, range: -60, ratio: 8 } },
+        { name: 'Soft Expander', values: { threshold: -50, attack: 10, hold: 50, release: 200, range: -20, ratio: 2 } },
+        { name: 'Bass Gate', values: { threshold: -35, attack: 1, hold: 80, release: 150, range: -70, ratio: 20, hpfFreq: 150, hpfEnabled: 1 } },
+      ],
+    },
+    factory: (ctx) => createWorkletEffect(ctx, 'gate'),
+    defaultParams: defaultWorkletParams.gate,
   },
 ];
 

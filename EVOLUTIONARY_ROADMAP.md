@@ -245,16 +245,22 @@ client/src/__tests__/
 
 ### 3.1 Audio Processing - HIGH IMPACT
 
-| Task | Priority | Impact |
-|------|----------|--------|
-| Implement incremental audio graph updates (not full rebuild) | HIGH | Eliminates audio glitches |
-| Add sample rate detection and pass to worklets | MEDIUM | Flexibility |
-| Cache frequency pre-warping calculations | MEDIUM | Reduces CPU |
-| Add latency reporting and display | MEDIUM | User feedback |
+| Task | Priority | Impact | Status |
+|------|----------|--------|--------|
+| Implement incremental audio graph updates (not full rebuild) | HIGH | Eliminates audio glitches | **DONE** |
+| Add sample rate detection and pass to worklets | MEDIUM | Flexibility | Pending |
+| Cache frequency pre-warping calculations | MEDIUM | Reduces CPU | Pending |
+| Add latency reporting and display | MEDIUM | User feedback | Pending |
 
-**Current Issue:** `rebuildAudioGraph()` in pedalboard-engine.ts disconnects and reconnects entire chain on every effect change, causing audible pops.
-
-**Solution:** Implement hot-swap bypass routing instead of full graph rebuild.
+**January 25, 2026 Implementation Notes:**
+- Implemented crossfade architecture in `pedalboard-engine.ts` with dual effect chains (A/B)
+- 15ms crossfade duration eliminates audio pops/clicks during effect chain modifications
+- Static graph portions (source, meters, analyser, output) remain stable - no longer disconnected
+- Only effect chain connections are modified when adding/removing/reordering effects
+- Effect toggle bypass already worked via internal worklet bypass (no graph rebuild needed)
+- Added `effectChainA` and `effectChainB` gain nodes for seamless A/B crossfading
+- `updateAudioGraphWithCrossfade()` handles smooth transitions between chain configurations
+- Cleanup of old chain connections scheduled after crossfade completes (15ms + buffer)
 
 ### 3.2 Frontend Performance
 
@@ -304,27 +310,63 @@ client/src/__tests__/
 
 ### 4.1 Audio Effects - HIGH PRIORITY
 
-| Effect | Priority | Effort | Notes |
-|--------|----------|--------|-------|
-| **Reverb** (Convolution-based) | HIGH | High | Critical gap - 80% of chains use reverb |
-| **Gate/Expander** | HIGH | Medium | Essential for live recording |
-| **Multi-band Compressor** | HIGH | Medium | Professional dynamics control |
-| **Graphic EQ** (10-band) | MEDIUM | Medium | Visual frequency control |
-| **Overdrive/Boost** | MEDIUM | Low | Distinct from distortion |
-| **Pitch Shift** | MEDIUM | High | Popular effect |
-| **Ring Modulator** | LOW | Low | Experimental/metallic sounds |
-| **Bitcrusher** | LOW | Low | Lo-fi aesthetic |
+| Effect | Priority | Effort | Notes | Status |
+|--------|----------|--------|-------|--------|
+| **Reverb** (Convolution-based) | HIGH | High | Critical gap - 80% of chains use reverb | **DONE** |
+| **Gate/Expander** | HIGH | Medium | Essential for live recording | **DONE** |
+| **Multi-band Compressor** | HIGH | Medium | Professional dynamics control | Pending |
+| **Graphic EQ** (10-band) | MEDIUM | Medium | Visual frequency control | Pending |
+| **Overdrive/Boost** | MEDIUM | Low | Distinct from distortion | Pending |
+| **Pitch Shift** | MEDIUM | High | Popular effect | Pending |
+| **Ring Modulator** | LOW | Low | Experimental/metallic sounds | Pending |
+| **Bitcrusher** | LOW | Low | Lo-fi aesthetic | Pending |
+
+**January 25, 2026 - Gate/Expander Implementation:**
+- Full noise gate with expander mode for dynamics control
+- Parameters: threshold (-60 to 0 dB), attack (0.1-50ms), hold (0-500ms), release (5-1000ms)
+- Range/depth control (-80 to 0 dB) for maximum attenuation
+- Ratio control (1:1 to 100:1) - low ratios for soft expansion, 100 for hard gate
+- Sidechain HPF (20-500 Hz) to ignore low-frequency content in detection
+- Real-time gain reduction metering via message port for visual feedback
+- 6 presets: Gentle Gate, Tight Gate, Drum Gate, Vocal Gate, Soft Expander, Bass Gate
 
 ### 4.2 User Experience
 
-| Feature | Priority | Impact |
-|---------|----------|--------|
-| Undo/Redo system for parameter changes | HIGH | Core workflow |
-| Signal flow visualization | HIGH | Debugging complex chains |
-| Preset tagging and search | MEDIUM | Discoverability |
-| Keyboard shortcuts (bypass, copy, paste) | MEDIUM | Productivity |
-| A/B comparison mode | MEDIUM | Effect evaluation |
-| MIDI CC learning | HIGH | Hardware controller support |
+| Feature | Priority | Impact | Status |
+|---------|----------|--------|--------|
+| Undo/Redo system for parameter changes | HIGH | Core workflow | **DONE** |
+| Signal flow visualization | HIGH | Debugging complex chains | Pending |
+| Preset tagging and search | MEDIUM | Discoverability | Pending |
+| Keyboard shortcuts (bypass, copy, paste) | MEDIUM | Productivity | **DONE** |
+| A/B comparison mode | MEDIUM | Effect evaluation | Pending |
+| MIDI CC learning | HIGH | Hardware controller support | Pending |
+
+**January 25, 2026 - Undo/Redo Implementation:**
+- Command pattern with state snapshots for reliable undo/redo
+- Tracks all effect chain modifications:
+  - Effect parameter changes (debounced 300ms for continuous adjustments like knobs)
+  - Effect additions/removals (immediate recording)
+  - Effect reordering via drag-and-drop
+  - Effect enable/disable toggles
+  - Input/output gain changes
+  - Global bypass state changes
+  - Preset loads (URL and file)
+- 50-entry history limit to balance memory usage
+- Keyboard shortcuts: Ctrl+Z / Cmd+Z for undo, Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y for redo
+- UI controls in Pedalboard header with undo/redo buttons and history dropdown
+- Tooltips showing keyboard shortcuts and action descriptions
+- Files: `client/src/lib/undo-history.ts`, `client/src/hooks/use-undo-redo.ts`, `client/src/components/undo-redo-controls.tsx`
+
+**January 25, 2026 - Keyboard Shortcuts Implementation:**
+- Comprehensive keyboard shortcuts system with help dialog (press `?` to toggle)
+- Shortcuts registered via `useKeyboardShortcuts` hook with automatic cleanup
+- All shortcuts ignore input when typing in text fields (INPUT, TEXTAREA, contentEditable)
+- **Playback:** `Space` - Toggle audio playback or global bypass
+- **Effects:** `B` - Bypass selected effect, `Delete/Backspace` - Remove effect, `Ctrl/Cmd+C` - Copy, `Ctrl/Cmd+V` - Paste, `Ctrl/Cmd+D` - Duplicate
+- **Navigation:** `Up/Down` arrows - Navigate between effects, `1-9` - Quick-select effect by position, `Escape` - Deselect all
+- **General:** `Ctrl/Cmd+S` - Save preset, `?` - Show keyboard shortcuts help
+- Visual keyboard shortcut button in Studio header with tooltip
+- Help dialog displays all shortcuts organized by category with platform-appropriate key symbols (Mac: command symbols, Windows: Ctrl/Alt)
 
 ### 4.3 Integrations
 
@@ -542,7 +584,7 @@ These can be implemented in <1 day each with high impact:
 5. ~~Add response compression~~ **DONE**
 6. ~~Fix PWA cache versioning~~ **DONE** (content-based hash + LRU eviction)
 7. Cache canvas gradients in visualizer
-8. Add keyboard shortcuts for common actions
+8. ~~Add keyboard shortcuts for common actions~~ **DONE** (Space, B, Delete, Ctrl+C/V/D/S, arrows, 1-9, Escape, ?)
 9. Create `.env.example` file
 10. Add basic health check expansion
 

@@ -6,12 +6,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, Home, LogOut, Headphones, Waves, ChevronLeft, Download, FileAudio, Loader2, Music, Users } from 'lucide-react';
+import { Volume2, Home, LogOut, Headphones, Waves, ChevronLeft, Download, FileAudio, Loader2, Music, Users, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { AudioInput, type AudioInputRef } from '@/components/audio-input';
 import { AudioVisualizer } from '@/components/audio-visualizer';
@@ -29,7 +30,11 @@ import { usePedalboard, type WorkletEffectType } from '@/hooks/use-pedalboard';
 import { useAudioAdapter } from '@/hooks/use-audio-adapter';
 import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { decodePresetFromUrl, initializeDefaultPresets } from '@/lib/preset-manager';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { useUndoRedo } from '@/hooks/use-undo-redo';
+import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
+import { decodePresetFromUrl, initializeDefaultPresets, savePreset } from '@/lib/preset-manager';
+import { useToast } from '@/hooks/use-toast';
 import {
   exportAudio,
   loadAudioFile,
@@ -59,6 +64,9 @@ export default function Studio() {
   const [exportBitDepth, setExportBitDepth] = useState<16 | 24 | 32>(16);
   const [exportNormalize, setExportNormalize] = useState(true);
   const [pendingRecording, setPendingRecording] = useState<{url: string, title: string} | null>(null);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const [selectedEffectIndex, setSelectedEffectIndex] = useState<number>(-1);
+  const [clipboardEffect, setClipboardEffect] = useState<{ type: WorkletEffectType; params: Record<string, number> } | null>(null);
 
   const audioFileRef = useRef<File | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -93,6 +101,379 @@ export default function Studio() {
     outputNode,
   } = usePedalboard();
 
+  const { registerShortcut, unregisterShortcut } = useKeyboardShortcuts();
+  const { toast } = useToast();
+  const undoRedo = useUndoRedo();
+
+  // Wrapped pedalboard actions that record undo/redo history
+  const handleAddEffect = useCallback((type: WorkletEffectType) => {
+    const id = addEffect(type);
+    undoRedo.recordEffectAdd(type);
+    return id;
+  }, [addEffect, undoRedo]);
+
+  const handleRemoveEffect = useCallback((id: string) => {
+    const effect = effects.find(e => e.id === id);
+    removeEffect(id);
+    if (effect) {
+      undoRedo.recordEffectRemove(effect.type);
+    }
+  }, [effects, removeEffect, undoRedo]);
+
+  const handleReorderEffects = useCallback((newOrder: string[]) => {
+    reorderEffects(newOrder);
+    undoRedo.recordEffectReorder();
+  }, [reorderEffects, undoRedo]);
+
+  const handleToggleEffect = useCallback((id: string) => {
+    const effect = effects.find(e => e.id === id);
+    toggleEffect(id);
+    if (effect) {
+      undoRedo.recordEffectToggle(effect.type, !effect.enabled);
+    }
+  }, [effects, toggleEffect, undoRedo]);
+
+  const handleUpdateParam = useCallback((id: string, param: string, value: number) => {
+    const effect = effects.find(e => e.id === id);
+    updateEffectParam(id, param, value);
+    if (effect) {
+      undoRedo.recordParamChange(effect.type, param);
+    }
+  }, [effects, updateEffectParam, undoRedo]);
+
+  const handleSetInputGain = useCallback((gain: number) => {
+    setInputGain(gain);
+    undoRedo.recordGainChange('input');
+  }, [setInputGain, undoRedo]);
+
+  const handleSetOutputGain = useCallback((gain: number) => {
+    setOutputGain(gain);
+    undoRedo.recordGainChange('output');
+  }, [setOutputGain, undoRedo]);
+
+  const handleSetGlobalBypass = useCallback((bypass: boolean) => {
+    setGlobalBypass(bypass);
+    undoRedo.recordBypassChange(bypass);
+  }, [setGlobalBypass, undoRedo]);
+
+  const handleImportPreset = useCallback((json: string) => {
+    importPreset(json);
+    undoRedo.recordPresetLoad();
+  }, [importPreset, undoRedo]);
+
+  // Get the audio element ref for playback control
+  const getAudioElement = useCallback((): HTMLAudioElement | null => {
+    // Find the audio element in the AudioInput component
+    const audioEl = document.querySelector('audio');
+    return audioEl as HTMLAudioElement | null;
+  }, []);
+
+  // Keyboard shortcut handlers
+  const handleTogglePlayback = useCallback(() => {
+    const audio = getAudioElement();
+    if (audio) {
+      if (audio.paused) {
+        audio.play().catch(console.error);
+        toast({ title: 'Playing', description: 'Audio playback started', duration: 1500 });
+      } else {
+        audio.pause();
+        toast({ title: 'Paused', description: 'Audio playback paused', duration: 1500 });
+      }
+    } else if (inputSource === 'microphone') {
+      // Toggle global bypass for microphone input
+      handleSetGlobalBypass(!globalBypass);
+      toast({
+        title: globalBypass ? 'Effects Active' : 'Effects Bypassed',
+        description: globalBypass ? 'Audio effects are now active' : 'Audio effects are bypassed',
+        duration: 1500
+      });
+    }
+  }, [getAudioElement, inputSource, globalBypass, handleSetGlobalBypass, toast]);
+
+  const handleBypassSelected = useCallback(() => {
+    if (selectedEffectIndex >= 0 && selectedEffectIndex < effects.length) {
+      const effect = effects[selectedEffectIndex];
+      handleToggleEffect(effect.id);
+      toast({
+        title: effect.enabled ? 'Effect Bypassed' : 'Effect Enabled',
+        description: `${effect.type} is now ${effect.enabled ? 'bypassed' : 'enabled'}`,
+        duration: 1500
+      });
+    } else {
+      // Toggle global bypass if no effect selected
+      handleSetGlobalBypass(!globalBypass);
+      toast({
+        title: globalBypass ? 'Effects Active' : 'Effects Bypassed',
+        description: globalBypass ? 'All effects enabled' : 'All effects bypassed',
+        duration: 1500
+      });
+    }
+  }, [selectedEffectIndex, effects, handleToggleEffect, globalBypass, handleSetGlobalBypass, toast]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedEffectIndex >= 0 && selectedEffectIndex < effects.length) {
+      const effect = effects[selectedEffectIndex];
+      handleRemoveEffect(effect.id);
+      toast({ title: 'Effect Removed', description: `${effect.type} has been removed`, duration: 1500 });
+      // Adjust selection
+      if (selectedEffectIndex >= effects.length - 1) {
+        setSelectedEffectIndex(Math.max(0, effects.length - 2));
+      }
+    }
+  }, [selectedEffectIndex, effects, handleRemoveEffect, toast]);
+
+  const handleCopyEffect = useCallback(() => {
+    if (selectedEffectIndex >= 0 && selectedEffectIndex < effects.length) {
+      const effect = effects[selectedEffectIndex];
+      setClipboardEffect({ type: effect.type, params: { ...effect.params } });
+      toast({ title: 'Effect Copied', description: `${effect.type} copied to clipboard`, duration: 1500 });
+    }
+  }, [selectedEffectIndex, effects, toast]);
+
+  const handlePasteEffect = useCallback(() => {
+    if (clipboardEffect) {
+      const id = handleAddEffect(clipboardEffect.type);
+      if (id) {
+        Object.entries(clipboardEffect.params).forEach(([param, value]) => {
+          handleUpdateParam(id, param, value);
+        });
+        toast({ title: 'Effect Pasted', description: `${clipboardEffect.type} added to chain`, duration: 1500 });
+        setSelectedEffectIndex(effects.length); // Select the new effect
+      }
+    }
+  }, [clipboardEffect, handleAddEffect, handleUpdateParam, effects.length, toast]);
+
+  const handleDuplicateEffect = useCallback(() => {
+    if (selectedEffectIndex >= 0 && selectedEffectIndex < effects.length) {
+      const effect = effects[selectedEffectIndex];
+      const id = handleAddEffect(effect.type);
+      if (id) {
+        Object.entries(effect.params).forEach(([param, value]) => {
+          handleUpdateParam(id, param, value);
+        });
+        toast({ title: 'Effect Duplicated', description: `${effect.type} duplicated`, duration: 1500 });
+        setSelectedEffectIndex(effects.length); // Select the new effect
+      }
+    }
+  }, [selectedEffectIndex, effects, handleAddEffect, handleUpdateParam, toast]);
+
+  const handleSavePreset = useCallback(() => {
+    const presetName = `Preset ${new Date().toLocaleString()}`;
+    savePreset({
+      name: presetName,
+      inputGain,
+      outputGain,
+      effects: effects.map(e => ({
+        type: e.type,
+        enabled: e.enabled,
+        params: e.params,
+      })),
+    });
+    toast({ title: 'Preset Saved', description: `Saved as "${presetName}"`, duration: 2000 });
+  }, [inputGain, outputGain, effects, toast]);
+
+  const handleSelectEffectByNumber = useCallback((num: number) => {
+    const index = num - 1;
+    if (index >= 0 && index < effects.length) {
+      setSelectedEffectIndex(index);
+      toast({ title: 'Effect Selected', description: `Selected ${effects[index].type}`, duration: 1000 });
+    }
+  }, [effects, toast]);
+
+  const handleNavigateUp = useCallback(() => {
+    if (effects.length > 0) {
+      const newIndex = selectedEffectIndex <= 0 ? effects.length - 1 : selectedEffectIndex - 1;
+      setSelectedEffectIndex(newIndex);
+    }
+  }, [effects.length, selectedEffectIndex]);
+
+  const handleNavigateDown = useCallback(() => {
+    if (effects.length > 0) {
+      const newIndex = selectedEffectIndex >= effects.length - 1 ? 0 : selectedEffectIndex + 1;
+      setSelectedEffectIndex(newIndex);
+    }
+  }, [effects.length, selectedEffectIndex]);
+
+  const handleDeselect = useCallback(() => {
+    setSelectedEffectIndex(-1);
+    toast({ title: 'Deselected', description: 'All effects deselected', duration: 1000 });
+  }, [toast]);
+
+  const handleShowShortcuts = useCallback(() => {
+    setShortcutsDialogOpen(prev => !prev);
+  }, []);
+
+  // Register keyboard shortcuts
+  useEffect(() => {
+    // Playback shortcuts
+    registerShortcut({
+      key: ' ',
+      description: 'Toggle playback / bypass',
+      category: 'playback',
+      action: handleTogglePlayback,
+    });
+
+    // Effect shortcuts
+    registerShortcut({
+      key: 'b',
+      description: 'Bypass selected effect',
+      category: 'effects',
+      action: handleBypassSelected,
+    });
+
+    registerShortcut({
+      key: 'Delete',
+      description: 'Remove selected effect',
+      category: 'effects',
+      action: handleDeleteSelected,
+    });
+
+    registerShortcut({
+      key: 'Backspace',
+      description: 'Remove selected effect',
+      category: 'effects',
+      action: handleDeleteSelected,
+    });
+
+    registerShortcut({
+      key: 'c',
+      ctrl: true,
+      description: 'Copy selected effect',
+      category: 'effects',
+      action: handleCopyEffect,
+    });
+
+    registerShortcut({
+      key: 'c',
+      meta: true,
+      description: 'Copy selected effect',
+      category: 'effects',
+      action: handleCopyEffect,
+    });
+
+    registerShortcut({
+      key: 'v',
+      ctrl: true,
+      description: 'Paste effect',
+      category: 'effects',
+      action: handlePasteEffect,
+    });
+
+    registerShortcut({
+      key: 'v',
+      meta: true,
+      description: 'Paste effect',
+      category: 'effects',
+      action: handlePasteEffect,
+    });
+
+    registerShortcut({
+      key: 'd',
+      ctrl: true,
+      description: 'Duplicate selected effect',
+      category: 'effects',
+      action: handleDuplicateEffect,
+    });
+
+    registerShortcut({
+      key: 'd',
+      meta: true,
+      description: 'Duplicate selected effect',
+      category: 'effects',
+      action: handleDuplicateEffect,
+    });
+
+    registerShortcut({
+      key: 's',
+      ctrl: true,
+      description: 'Save preset',
+      category: 'general',
+      action: handleSavePreset,
+    });
+
+    registerShortcut({
+      key: 's',
+      meta: true,
+      description: 'Save preset',
+      category: 'general',
+      action: handleSavePreset,
+    });
+
+    // Navigation shortcuts
+    registerShortcut({
+      key: 'ArrowUp',
+      description: 'Select previous effect',
+      category: 'navigation',
+      action: handleNavigateUp,
+    });
+
+    registerShortcut({
+      key: 'ArrowDown',
+      description: 'Select next effect',
+      category: 'navigation',
+      action: handleNavigateDown,
+    });
+
+    registerShortcut({
+      key: 'Escape',
+      description: 'Deselect all',
+      category: 'navigation',
+      action: handleDeselect,
+    });
+
+    // Quick select (1-9)
+    for (let i = 1; i <= 9; i++) {
+      registerShortcut({
+        key: String(i),
+        description: `Select effect ${i}`,
+        category: 'navigation',
+        action: () => handleSelectEffectByNumber(i),
+      });
+    }
+
+    // Help shortcut
+    registerShortcut({
+      key: '?',
+      description: 'Show keyboard shortcuts',
+      category: 'general',
+      action: handleShowShortcuts,
+    });
+
+    return () => {
+      // Cleanup shortcuts on unmount
+      unregisterShortcut(' ');
+      unregisterShortcut('b');
+      unregisterShortcut('Delete');
+      unregisterShortcut('Backspace');
+      unregisterShortcut('c');
+      unregisterShortcut('v');
+      unregisterShortcut('d');
+      unregisterShortcut('s');
+      unregisterShortcut('ArrowUp');
+      unregisterShortcut('ArrowDown');
+      unregisterShortcut('Escape');
+      unregisterShortcut('?');
+      for (let i = 1; i <= 9; i++) {
+        unregisterShortcut(String(i));
+      }
+    };
+  }, [
+    registerShortcut,
+    unregisterShortcut,
+    handleTogglePlayback,
+    handleBypassSelected,
+    handleDeleteSelected,
+    handleCopyEffect,
+    handlePasteEffect,
+    handleDuplicateEffect,
+    handleSavePreset,
+    handleNavigateUp,
+    handleNavigateDown,
+    handleDeselect,
+    handleSelectEffectByNumber,
+    handleShowShortcuts,
+  ]);
+
   // Initialize default presets on first load
   useEffect(() => {
     initializeDefaultPresets();
@@ -114,11 +495,11 @@ export default function Studio() {
         });
         // Delay import to ensure audio is initialized
         setTimeout(() => {
-          importPreset(presetJson);
+          handleImportPreset(presetJson);
         }, 500);
       }
     }
-  }, [searchString, importPreset]);
+  }, [searchString, handleImportPreset]);
 
   // Handle file loaded for export
   const handleAudioFileLoaded = useCallback(async (file: File) => {
@@ -193,15 +574,15 @@ export default function Studio() {
     };
 
     const newType = typeMap[type] || 'eq';
-    const id = addEffect(newType);
+    const id = handleAddEffect(newType);
 
     // Apply params
     if (id) {
       Object.entries(params).forEach(([param, value]) => {
-        updateEffectParam(id, param, value);
+        handleUpdateParam(id, param, value);
       });
     }
-  }, [addEffect, updateEffectParam]);
+  }, [handleAddEffect, handleUpdateParam]);
 
   const handleAIChainSuggestion = useCallback((suggestions: Array<{ type: EffectType; params: Record<string, number> }>) => {
     suggestions.forEach((suggestion) => {
@@ -232,14 +613,14 @@ export default function Studio() {
     const normalizedType = type.toLowerCase().trim();
     const newType = typeMap[normalizedType] || 'eq';
     console.log(`[AI Effect] Applying effect: ${type} -> ${normalizedType} -> ${newType}`);
-    const id = addEffect(newType);
+    const id = handleAddEffect(newType);
 
     if (id) {
       Object.entries(params).forEach(([param, value]) => {
-        updateEffectParam(id, param, value);
+        handleUpdateParam(id, param, value);
       });
     }
-  }, [addEffect, updateEffectParam]);
+  }, [handleAddEffect, handleUpdateParam]);
 
   const handleAIChatChainSuggestion = useCallback((suggestions: EffectSuggestion[]) => {
     suggestions.forEach((suggestion) => {
@@ -338,16 +719,27 @@ export default function Studio() {
         outputGain={outputGain}
         globalBypass={globalBypass}
         levels={levels}
-        onAddEffect={addEffect}
-        onRemoveEffect={removeEffect}
-        onReorderEffects={reorderEffects}
-        onToggleEffect={toggleEffect}
-        onUpdateParam={updateEffectParam}
-        onSetInputGain={setInputGain}
-        onSetOutputGain={setOutputGain}
-        onSetGlobalBypass={setGlobalBypass}
+        onAddEffect={handleAddEffect}
+        onRemoveEffect={handleRemoveEffect}
+        onReorderEffects={handleReorderEffects}
+        onToggleEffect={handleToggleEffect}
+        onUpdateParam={handleUpdateParam}
+        onSetInputGain={handleSetInputGain}
+        onSetOutputGain={handleSetOutputGain}
+        onSetGlobalBypass={handleSetGlobalBypass}
         onExportPreset={exportPreset}
-        onImportPreset={importPreset}
+        onImportPreset={handleImportPreset}
+        undoRedo={{
+          canUndo: undoRedo.canUndo,
+          canRedo: undoRedo.canRedo,
+          undoDescription: undoRedo.undoDescription,
+          redoDescription: undoRedo.redoDescription,
+          undoHistory: undoRedo.undoHistory,
+          redoHistory: undoRedo.redoHistory,
+          onUndo: undoRedo.undo,
+          onRedo: undoRedo.redo,
+          onClearHistory: undoRedo.clearHistory,
+        }}
       />
 
       {/* AI Effect Suggestions */}
@@ -688,6 +1080,23 @@ export default function Studio() {
           </div>
 
           <div className="flex items-center gap-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShortcutsDialogOpen(true)}
+                    data-testid="button-shortcuts"
+                  >
+                    <Keyboard className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Keyboard shortcuts (?)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {isAuthenticated && user && (
               <span className="text-sm text-muted-foreground hidden md:block">
                 {user.firstName || user.email}
@@ -742,6 +1151,12 @@ export default function Studio() {
           )}
         </Tabs>
       </main>
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onOpenChange={setShortcutsDialogOpen}
+      />
     </div>
   );
 }
