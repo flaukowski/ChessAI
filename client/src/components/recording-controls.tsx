@@ -82,11 +82,6 @@ export function RecordingControls({
     setSaveError(null);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
-      if (!token) {
-        throw new Error('You must be logged in to save recordings');
-      }
-
       // Convert blob to base64
       const audioData = await blobToBase64(pendingBlob);
 
@@ -110,8 +105,8 @@ export function RecordingControls({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           audioData,
           format,

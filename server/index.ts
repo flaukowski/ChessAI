@@ -3,6 +3,7 @@ import session from "express-session";
 import helmet from "helmet";
 import cors from "cors";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nanoid } from "nanoid";
@@ -69,6 +70,9 @@ app.use(cors({
   exposedHeaders: ['X-Request-ID'],
   maxAge: 86400, // 24 hours
 }));
+
+// Cookie parser for HttpOnly cookie-based authentication
+app.use(cookieParser());
 
 // =============================================================================
 // RESPONSE COMPRESSION

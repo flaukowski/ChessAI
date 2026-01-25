@@ -74,6 +74,11 @@ const ACCESS_TOKEN_KEY = 'space-child-access-token';
 const REFRESH_TOKEN_KEY = 'space-child-refresh-token';
 const ZKP_SALT_KEY = 'space-child-zkp-salt';
 
+/**
+ * @deprecated Tokens are now stored in HttpOnly cookies.
+ * This function is kept for backward compatibility only.
+ * Do NOT use this for API calls - cookies are sent automatically with credentials: 'include'.
+ */
 export function getStoredTokens(): AuthTokens | null {
   if (typeof window === 'undefined') return null;
 
@@ -86,6 +91,10 @@ export function getStoredTokens(): AuthTokens | null {
   return null;
 }
 
+/**
+ * @deprecated Tokens are now stored in HttpOnly cookies set by the server.
+ * This function is kept for backward compatibility only.
+ */
 export function setStoredTokens(tokens: AuthTokens): void {
   if (typeof window === 'undefined') return;
 
@@ -93,6 +102,10 @@ export function setStoredTokens(tokens: AuthTokens): void {
   localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
 }
 
+/**
+ * @deprecated Tokens are now stored in HttpOnly cookies.
+ * This function is kept for backward compatibility to clear legacy localStorage tokens.
+ */
 export function clearStoredTokens(): void {
   if (typeof window === 'undefined') return;
 
@@ -121,6 +134,7 @@ export async function register(params: RegisterParams): Promise<RegisterResponse
   const response = await fetch(`${AUTH_BASE_URL}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
       email: params.email,
       zkpCommitment,
@@ -162,6 +176,7 @@ export async function login(params: LoginParams): Promise<AuthResponse> {
   const challengeResponse = await fetch(`${AUTH_BASE_URL}/login/challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email: params.email }),
   });
 
@@ -188,6 +203,7 @@ export async function login(params: LoginParams): Promise<AuthResponse> {
   const verifyResponse = await fetch(`${AUTH_BASE_URL}/login/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
       email: params.email,
       proof,
@@ -234,6 +250,7 @@ export async function loginLegacy(params: LoginParams): Promise<AuthResponse> {
   const response = await fetch(`${AUTH_BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(params),
   });
 
@@ -285,38 +302,23 @@ export async function smartLogin(params: LoginParams): Promise<AuthResponse> {
 }
 
 export async function logout(): Promise<void> {
-  const tokens = getStoredTokens();
-
-  if (tokens?.accessToken) {
-    try {
-      await fetch(`${AUTH_BASE_URL}/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokens.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-      });
-    } catch (e) {
-      // Ignore logout errors
-    }
+  try {
+    await fetch(`${AUTH_BASE_URL}/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+  } catch (e) {
+    // Ignore logout errors
   }
 
   clearStoredTokens();
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const tokens = getStoredTokens();
-
-  if (!tokens?.accessToken) {
-    return null;
-  }
-
   try {
     const response = await fetch(`${AUTH_BASE_URL}/user`, {
-      headers: {
-        'Authorization': `Bearer ${tokens.accessToken}`,
-      },
+      credentials: 'include',
     });
 
     if (response.status === 401) {
@@ -340,17 +342,11 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 export async function refreshAccessToken(): Promise<boolean> {
-  const tokens = getStoredTokens();
-
-  if (!tokens?.refreshToken) {
-    return false;
-  }
-
   try {
     const response = await fetch(`${AUTH_BASE_URL}/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -359,6 +355,7 @@ export async function refreshAccessToken(): Promise<boolean> {
     }
 
     const data = await response.json();
+    // Still store tokens for backward compatibility
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
     return true;
   } catch (e) {
@@ -371,6 +368,7 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
   const response = await fetch(`${AUTH_BASE_URL}/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ token }),
   });
 
@@ -391,6 +389,7 @@ export async function resendVerification(email: string): Promise<{ success: bool
   const response = await fetch(`${AUTH_BASE_URL}/resend-verification`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email }),
   });
 
@@ -407,6 +406,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   const response = await fetch(`${AUTH_BASE_URL}/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email }),
   });
 
@@ -429,6 +429,7 @@ export async function resetPassword(token: string, password: string): Promise<{ 
   const response = await fetch(`${AUTH_BASE_URL}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ token, zkpCommitment }),
   });
 
@@ -451,23 +452,23 @@ export async function resetPassword(token: string, password: string): Promise<{ 
 
 export function createAuthenticatedFetch() {
   return async (url: string, options: RequestInit = {}): Promise<Response> => {
-    const tokens = getStoredTokens();
-
     const headers = new Headers(options.headers);
-    if (tokens?.accessToken) {
-      headers.set('Authorization', `Bearer ${tokens.accessToken}`);
-    }
 
-    let response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { 
+      ...options, 
+      headers,
+      credentials: 'include',
+    });
 
-    if (response.status === 401 && tokens?.refreshToken) {
+    // Try refresh if unauthorized
+    if (response.status === 401) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
-        const newTokens = getStoredTokens();
-        if (newTokens?.accessToken) {
-          headers.set('Authorization', `Bearer ${newTokens.accessToken}`);
-          response = await fetch(url, { ...options, headers });
-        }
+        response = await fetch(url, { 
+          ...options, 
+          headers,
+          credentials: 'include',
+        });
       }
     }
 

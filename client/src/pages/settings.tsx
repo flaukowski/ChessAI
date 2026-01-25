@@ -43,17 +43,13 @@ import { useSpaceChildAuth } from '@/hooks/use-space-child-auth';
 import { useToast } from '@/hooks/use-toast';
 import alienOctopusLogo from "@assets/IMG_20251007_202557_1766540112397_1768261396578.png";
 
-// API helper for authenticated requests
+// API helper for authenticated requests (uses HttpOnly cookies for auth)
 const authFetch = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('space-child-access-token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers, credentials: 'include' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || `Request failed with status ${response.status}`);

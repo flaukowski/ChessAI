@@ -94,15 +94,8 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
     setError(null);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
       const response = await fetch('/api/v1/recordings', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -135,7 +128,7 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
         setPlayingId(recording.id);
 
         // Track play count
-        fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST' });
+        fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
       }
     }
   }, [playingId]);
@@ -144,12 +137,9 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
     if (!confirm('Are you sure you want to delete this recording?')) return;
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
       const response = await fetch(`/api/v1/recordings/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -166,12 +156,9 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
 
   const handleTogglePublic = useCallback(async (recording: Recording) => {
     try {
-      const token = localStorage.getItem('space-child-access-token');
       const response = await fetch(`/api/v1/recordings/${recording.id}/toggle-public`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -195,13 +182,12 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
 
     setIsSaving(true);
     try {
-      const token = localStorage.getItem('space-child-access-token');
       const response = await fetch(`/api/v1/recordings/${editingRecording.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           title: editTitle.trim(),
           description: editDescription.trim() || undefined,

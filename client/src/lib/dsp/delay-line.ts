@@ -5,17 +5,19 @@
  * Max ~1.25s delays at ~52kHz (65536 samples)
  */
 
-const SAMPLE_ARRAY_SIZE = 65536;
-const SAMPLE_ARRAY_MASK = SAMPLE_ARRAY_SIZE - 1;
+const DEFAULT_SAMPLE_ARRAY_SIZE = 65536;
 
 export class DelayLine {
   private buffer: Float32Array;
+  private mask: number;
   private writeIndex: number = 0;
   private sampleRate: number;
 
-  constructor(sampleRate: number = 48000, maxDelaySamples: number = SAMPLE_ARRAY_SIZE) {
+  constructor(sampleRate: number = 48000, maxDelaySamples: number = DEFAULT_SAMPLE_ARRAY_SIZE) {
     this.sampleRate = sampleRate;
-    this.buffer = new Float32Array(Math.min(maxDelaySamples, SAMPLE_ARRAY_SIZE));
+    const bufferSize = Math.min(maxDelaySamples, DEFAULT_SAMPLE_ARRAY_SIZE);
+    this.buffer = new Float32Array(bufferSize);
+    this.mask = bufferSize - 1;
   }
 
   get maxDelayMs(): number {
@@ -23,7 +25,7 @@ export class DelayLine {
   }
 
   write(sample: number): void {
-    this.writeIndex = (this.writeIndex + 1) & SAMPLE_ARRAY_MASK;
+    this.writeIndex = (this.writeIndex + 1) & this.mask;
     this.buffer[this.writeIndex] = sample;
   }
 
@@ -32,8 +34,8 @@ export class DelayLine {
     const frac = delaySamples - intDelay;
     
     const idx = this.writeIndex - intDelay;
-    const a = this.buffer[(idx) & SAMPLE_ARRAY_MASK];
-    const b = this.buffer[(idx - 1) & SAMPLE_ARRAY_MASK];
+    const a = this.buffer[(idx) & this.mask];
+    const b = this.buffer[(idx - 1) & this.mask];
     
     // Linear interpolation for sub-sample accuracy
     return a + (b - a) * frac;

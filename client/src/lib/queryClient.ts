@@ -1,5 +1,4 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { getStoredTokens } from "./space-child-auth";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -8,22 +7,12 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const tokens = getStoredTokens();
-  if (tokens?.accessToken) {
-    return { "Authorization": `Bearer ${tokens.accessToken}` };
-  }
-  return {};
-}
-
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const headers: Record<string, string> = {
-    ...getAuthHeaders(),
-  };
+  const headers: Record<string, string> = {};
   if (data) {
     headers["Content-Type"] = "application/json";
   }
@@ -47,7 +36,6 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
-      headers: getAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

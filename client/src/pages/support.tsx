@@ -37,21 +37,12 @@ export default function Support() {
         ? '/api/v1/support/contact/auth'
         : '/api/v1/support/contact';
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add auth token if authenticated
-      if (isAuthenticated) {
-        const token = localStorage.getItem('space-child-access-token');
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-      }
-
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
         body: JSON.stringify({
           name: name || undefined,
           email,

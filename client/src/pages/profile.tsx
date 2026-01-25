@@ -62,15 +62,8 @@ export default function Profile() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
       const response = await fetch('/api/v1/social/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -133,17 +126,12 @@ export default function Profile() {
     setIsSaving(true);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
       const response = await fetch('/api/v1/social/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           bio: bio.trim() || null,
           avatarUrl: avatarUrl.trim() || null,

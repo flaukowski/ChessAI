@@ -160,12 +160,10 @@ export default function Billing() {
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanDetails | null>(null);
 
-  // Helper to get auth headers
+  // Helper to get request options with credentials (uses HttpOnly cookies for auth)
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('space-child-access-token');
     return {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }, []);
 
@@ -175,6 +173,7 @@ export default function Billing() {
       setIsLoadingSubscription(true);
       const response = await fetch('/api/v1/billing/subscription', {
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -200,6 +199,7 @@ export default function Billing() {
       setIsLoadingUsage(true);
       const response = await fetch('/api/v1/billing/usage', {
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -221,6 +221,7 @@ export default function Billing() {
       setIsLoadingHistory(true);
       const response = await fetch('/api/v1/billing/history', {
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -252,6 +253,7 @@ export default function Billing() {
       const response = await fetch('/api/v1/billing/checkout', {
         method: 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ priceId }),
       });
 
@@ -279,6 +281,7 @@ export default function Billing() {
       const response = await fetch('/api/v1/billing/portal', {
         method: 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -304,6 +307,7 @@ export default function Billing() {
       const response = await fetch('/api/v1/billing/cancel', {
         method: 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {

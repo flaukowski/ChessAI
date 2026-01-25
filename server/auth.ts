@@ -21,8 +21,44 @@ import {
   loginSchema,
   challengeSchema,
 } from './validation';
+import cookieParser from 'cookie-parser';
 
 const router = Router();
+
+// Cookie configuration for HttpOnly cookies (XSS protection)
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path: '/api',
+};
+
+const REFRESH_COOKIE_OPTIONS = {
+  ...COOKIE_OPTIONS,
+  path: '/api/space-child-auth/refresh',
+};
+
+// Cookie names
+const ACCESS_TOKEN_COOKIE = 'auth_access_token';
+const REFRESH_TOKEN_COOKIE = 'auth_refresh_token';
+
+// Helper to set auth cookies
+const setAuthCookies = (res: Response, accessToken: string, refreshToken: string, accessExpiresAt: Date, refreshExpiresAt: Date) => {
+  res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
+    ...COOKIE_OPTIONS,
+    expires: accessExpiresAt,
+  });
+  res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
+    ...REFRESH_COOKIE_OPTIONS,
+    expires: refreshExpiresAt,
+  });
+};
+
+// Helper to clear auth cookies
+const clearAuthCookies = (res: Response) => {
+  res.clearCookie(ACCESS_TOKEN_COOKIE, { path: COOKIE_OPTIONS.path });
+  res.clearCookie(REFRESH_TOKEN_COOKIE, { path: REFRESH_COOKIE_OPTIONS.path });
+};
 
 // Token configuration (from centralized config)
 const ACCESS_TOKEN_EXPIRY_MS = tokenConfig.accessTokenExpiryMs;
@@ -96,7 +132,7 @@ const createTokenPair = async (userId: string) => {
   accessTokenStore.set(accessToken, { userId, expiresAt: accessExpiresAt });
   await storage.createRefreshToken(userId, refreshToken, refreshExpiresAt);
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, accessExpiresAt, refreshExpiresAt };
 };
 
 const getClientIP = (req: Request): string => {
@@ -193,10 +229,16 @@ const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
 // Apply rate limiting to all auth routes
 router.use(rateLimiter);
 
-// Middleware to verify access token
+// Middleware to verify access token (reads from HttpOnly cookies first, falls back to Authorization header)
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1];
+  // Try to get token from HttpOnly cookie first (primary method for XSS protection)
+  let token = req.cookies?.[ACCESS_TOKEN_COOKIE];
+  
+  // Fall back to Authorization header for backwards compatibility
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    token = authHeader?.split(' ')[1];
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
@@ -346,6 +388,9 @@ router.post('/register', async (req: Request, res: Response) => {
     // Log successful registration
     await storage.recordLoginAttempt(normalizedEmail, true, getClientIP(req), req.headers['user-agent']);
     await logAuditEvent('auth.register.success', req, user.id, 'user', user.id, undefined, { email: normalizedEmail });
+
+    // Set HttpOnly cookies for XSS protection
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
 
     res.status(201).json({
       user: sanitizeUser({ ...user, zkpPublicKey: commitment.publicKey, zkpSalt: commitment.salt }),
@@ -522,6 +567,9 @@ router.post('/login/verify', async (req: Request, res: Response) => {
 
     const tokens = await createTokenPair(user.id);
 
+    // Set HttpOnly cookies for XSS protection
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+
     if (!user.emailVerified) {
       return res.json({
         user: sanitizeUser(user),
@@ -610,6 +658,9 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const tokens = await createTokenPair(user.id);
 
+    // Set HttpOnly cookies for XSS protection
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+
     if (!user.emailVerified) {
       return res.json({
         user: sanitizeUser(user),
@@ -640,9 +691,18 @@ router.post('/login', async (req: Request, res: Response) => {
 // Logout
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    const accessToken = authHeader?.split(' ')[1];
-    const { refreshToken } = req.body;
+    // Get token from cookie first, then fall back to Authorization header
+    let accessToken = req.cookies?.[ACCESS_TOKEN_COOKIE];
+    if (!accessToken) {
+      const authHeader = req.headers.authorization;
+      accessToken = authHeader?.split(' ')[1];
+    }
+    
+    // Get refresh token from cookie first, then fall back to body
+    let refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
+    if (!refreshToken) {
+      refreshToken = req.body?.refreshToken;
+    }
 
     if (accessToken) {
       accessTokenStore.delete(accessToken);
@@ -651,6 +711,9 @@ router.post('/logout', async (req: Request, res: Response) => {
     if (refreshToken) {
       await storage.deleteRefreshToken(refreshToken);
     }
+
+    // Clear HttpOnly cookies
+    clearAuthCookies(res);
 
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
@@ -665,8 +728,12 @@ router.post('/logout', async (req: Request, res: Response) => {
 // Get current user
 router.get('/user', async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(' ')[1];
+    // Get token from cookie first, then fall back to Authorization header
+    let token = req.cookies?.[ACCESS_TOKEN_COOKIE];
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      token = authHeader?.split(' ')[1];
+    }
 
     if (!token) {
       return res.status(401).json({ error: 'No token provided' });
@@ -700,7 +767,11 @@ router.get('/user', async (req: Request, res: Response) => {
 // Refresh token
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body;
+    // Get refresh token from cookie first, then fall back to body
+    let refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
+    if (!refreshToken) {
+      refreshToken = req.body?.refreshToken;
+    }
 
     if (!refreshToken) {
       return res.status(400).json({
@@ -712,6 +783,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const storedToken = await storage.getRefreshToken(refreshToken);
 
     if (!storedToken) {
+      // Clear invalid cookies
+      clearAuthCookies(res);
       return res.status(401).json({
         error: 'Invalid token',
         message: 'Refresh token is invalid or expired',
@@ -720,6 +793,9 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     await storage.deleteRefreshToken(refreshToken);
     const tokens = await createTokenPair(storedToken.userId);
+
+    // Set new HttpOnly cookies
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
 
     res.json({
       accessToken: tokens.accessToken,
@@ -767,6 +843,9 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     await storage.deleteEmailVerificationTokensForUser(user.id);
     const tokens = await createTokenPair(user.id);
+
+    // Set HttpOnly cookies for XSS protection
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
 
     res.json({
       success: true,
@@ -943,6 +1022,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     await storage.resetFailedAttempts(user.id); // Unlock account on password reset
 
     const tokens = await createTokenPair(user.id);
+
+    // Set HttpOnly cookies for XSS protection
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
 
     res.json({
       success: true,

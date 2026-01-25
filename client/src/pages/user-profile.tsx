@@ -82,14 +82,8 @@ export default function UserProfile() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
       const response = await fetch(`/api/v1/social/users/${username}`, {
-        headers,
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -116,7 +110,9 @@ export default function UserProfile() {
     setIsLoadingRecordings(true);
 
     try {
-      const response = await fetch(`/api/v1/social/users/${username}/recordings`);
+      const response = await fetch(`/api/v1/social/users/${username}/recordings`, {
+        credentials: 'include',
+      });
 
       if (response.ok) {
         const data: PublicRecording[] = await response.json();
@@ -153,14 +149,11 @@ export default function UserProfile() {
     setIsFollowLoading(true);
 
     try {
-      const token = localStorage.getItem('space-child-access-token');
       const method = isFollowing ? 'DELETE' : 'POST';
 
       const response = await fetch(`/api/v1/social/follow/${profile.id}`, {
         method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -203,7 +196,7 @@ export default function UserProfile() {
         setPlayingId(recording.id);
 
         // Track play count
-        fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST' });
+        fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
       }
     }
   }, [playingId]);
