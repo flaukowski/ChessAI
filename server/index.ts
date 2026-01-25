@@ -7,7 +7,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nanoid } from "nanoid";
-import { initializeDefaultUser } from "./auth";
+import { initializeDefaultUser, validateCSRFToken } from "./auth";
 
 const app = express();
 
@@ -73,6 +73,18 @@ app.use(cors({
 
 // Cookie parser for HttpOnly cookie-based authentication
 app.use(cookieParser());
+
+// =============================================================================
+// CSRF PROTECTION
+// =============================================================================
+// Apply CSRF validation to all API routes except auth endpoints (they set the token)
+app.use('/api', (req, res, next) => {
+  // Skip CSRF for auth endpoints (they set the token)
+  if (req.path.startsWith('/space-child-auth/')) {
+    return next();
+  }
+  return validateCSRFToken(req, res, next);
+});
 
 // =============================================================================
 // RESPONSE COMPRESSION

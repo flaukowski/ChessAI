@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,8 @@ const QUICK_PROMPTS = [
   "Ambient spacious atmosphere",
 ];
 
-export function AIEffectChat({
+// Memoized AIEffectChat - prevents re-renders when parent updates but props are same
+export const AIEffectChat = memo(function AIEffectChat({
   onApplySuggestion,
   onApplyChain,
   className,
@@ -235,11 +236,12 @@ export function AIEffectChat({
     }));
   };
 
-  const getConfidenceColor = (confidence: number) => {
+  // Memoized confidence color helper
+  const getConfidenceColor = useCallback((confidence: number) => {
     if (confidence >= 0.85) return "bg-green-500/20 text-green-400 border-green-500/30";
     if (confidence >= 0.7) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
     return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-  };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -469,4 +471,4 @@ export function AIEffectChat({
       </CardContent>
     </Card>
   );
-}
+});

@@ -73,6 +73,40 @@ interface ChallengeResponse {
 const ACCESS_TOKEN_KEY = 'space-child-access-token';
 const REFRESH_TOKEN_KEY = 'space-child-refresh-token';
 const ZKP_SALT_KEY = 'space-child-zkp-salt';
+const CSRF_TOKEN_KEY = 'space-child-csrf-token';
+
+/**
+ * Get the CSRF token from cookie (set by server) or localStorage fallback
+ */
+export function getStoredCSRFToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  // Try to get from cookie first (server sets this)
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'csrf_token') {
+      return value;
+    }
+  }
+  // Fallback to localStorage
+  return localStorage.getItem(CSRF_TOKEN_KEY);
+}
+
+/**
+ * Store CSRF token in localStorage (backup for cookie)
+ */
+export function setStoredCSRFToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CSRF_TOKEN_KEY, token);
+}
+
+/**
+ * Clear stored CSRF token
+ */
+export function clearStoredCSRFToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(CSRF_TOKEN_KEY);
+}
 
 /**
  * @deprecated Tokens are now stored in HttpOnly cookies.
@@ -112,6 +146,7 @@ export function clearStoredTokens(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(ZKP_SALT_KEY);
+  localStorage.removeItem(CSRF_TOKEN_KEY);
 }
 
 export function getStoredZKPSalt(): string | null {
@@ -153,7 +188,7 @@ export async function register(params: RegisterParams): Promise<RegisterResponse
     throw authError;
   }
 
-  const data: RegisterResponse = await response.json();
+  const data: RegisterResponse & { csrfToken?: string } = await response.json();
 
   if (data.accessToken && data.refreshToken) {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
@@ -161,6 +196,10 @@ export async function register(params: RegisterParams): Promise<RegisterResponse
 
   if (data.zkpSalt) {
     setStoredZKPSalt(data.zkpSalt);
+  }
+
+  if (data.csrfToken) {
+    setStoredCSRFToken(data.csrfToken);
   }
 
   return data;
@@ -227,6 +266,10 @@ export async function login(params: LoginParams): Promise<AuthResponse> {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   }
 
+  if (data.csrfToken) {
+    setStoredCSRFToken(data.csrfToken);
+  }
+
   // Store salt for future logins
   if (challengeData.salt) {
     setStoredZKPSalt(challengeData.salt);
@@ -273,6 +316,10 @@ export async function loginLegacy(params: LoginParams): Promise<AuthResponse> {
 
   if (data.zkpSalt) {
     setStoredZKPSalt(data.zkpSalt);
+  }
+
+  if (data.csrfToken) {
+    setStoredCSRFToken(data.csrfToken);
   }
 
   if (data.requiresVerification) {
@@ -357,6 +404,9 @@ export async function refreshAccessToken(): Promise<boolean> {
     const data = await response.json();
     // Still store tokens for backward compatibility
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    if (data.csrfToken) {
+      setStoredCSRFToken(data.csrfToken);
+    }
     return true;
   } catch (e) {
     clearStoredTokens();
@@ -380,6 +430,10 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
 
   if (data.accessToken && data.refreshToken) {
     setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+  }
+
+  if (data.csrfToken) {
+    setStoredCSRFToken(data.csrfToken);
   }
 
   return data;
@@ -447,6 +501,10 @@ export async function resetPassword(token: string, password: string): Promise<{ 
     setStoredZKPSalt(data.zkpSalt);
   }
 
+  if (data.csrfToken) {
+    setStoredCSRFToken(data.csrfToken);
+  }
+
   return data;
 }
 
@@ -454,8 +512,16 @@ export function createAuthenticatedFetch() {
   return async (url: string, options: RequestInit = {}): Promise<Response> => {
     const headers = new Headers(options.headers);
 
-    let response = await fetch(url, { 
-      ...options, 
+    // Add CSRF token for state-changing requests
+    if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
+      const csrfToken = getStoredCSRFToken();
+      if (csrfToken) {
+        headers.set('X-CSRF-Token', csrfToken);
+      }
+    }
+
+    let response = await fetch(url, {
+      ...options,
       headers,
       credentials: 'include',
     });
@@ -464,9 +530,17 @@ export function createAuthenticatedFetch() {
     if (response.status === 401) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
-        response = await fetch(url, { 
-          ...options, 
-          headers,
+        // Retry with potentially new CSRF token
+        const retryHeaders = new Headers(options.headers);
+        if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
+          const newCsrfToken = getStoredCSRFToken();
+          if (newCsrfToken) {
+            retryHeaders.set('X-CSRF-Token', newCsrfToken);
+          }
+        }
+        response = await fetch(url, {
+          ...options,
+          headers: retryHeaders,
           credentials: 'include',
         });
       }

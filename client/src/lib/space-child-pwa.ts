@@ -121,9 +121,13 @@ class SpaceChildPWA {
   }
 
   private startUpdatePolling() {
+    // Check for updates every 5 minutes (300000ms) instead of 60s for battery savings
+    // This reduces wake-ups by 5x while still ensuring timely updates
+    const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
     this.updateCheckInterval = setInterval(() => {
       this.checkForUpdates();
-    }, 60000);
+    }, UPDATE_CHECK_INTERVAL);
   }
 
   async checkForUpdates(): Promise<boolean> {

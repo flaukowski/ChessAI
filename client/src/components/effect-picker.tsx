@@ -3,10 +3,10 @@
  * Visual grid-based selector for DSP effects with icons and animations
  */
 
-import { useState } from 'react';
+import { useState, memo, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Waves, Radio, Disc, AudioLines, 
+import {
+  Waves, Radio, Disc, AudioLines,
   Sparkles, Check
 } from 'lucide-react';
 import { EffectType } from '@/hooks/use-audio-dsp';
@@ -85,8 +85,18 @@ const EFFECTS: {
   },
 ];
 
-export function EffectPicker({ selectedEffect, onSelect, onAdd, className }: EffectPickerProps) {
+// Memoized EffectPicker - prevents re-renders when parent updates but props are the same
+export const EffectPicker = memo(function EffectPicker({ selectedEffect, onSelect, onAdd, className }: EffectPickerProps) {
   const [hoveredEffect, setHoveredEffect] = useState<EffectType | null>(null);
+
+  // Memoize handlers to prevent child re-renders
+  const handleSelect = useCallback((type: EffectType) => {
+    onSelect(type);
+  }, [onSelect]);
+
+  const handleAdd = useCallback((type: EffectType) => {
+    onAdd(type);
+  }, [onAdd]);
 
   return (
     <div className={cn("grid grid-cols-4 gap-2", className)}>
@@ -101,13 +111,13 @@ export function EffectPicker({ selectedEffect, onSelect, onAdd, className }: Eff
               "relative flex flex-col items-center justify-center gap-1 p-3 rounded-xl",
               "border-2 transition-colors",
               "bg-card/50 backdrop-blur-sm",
-              isSelected 
-                ? "border-primary bg-primary/10" 
+              isSelected
+                ? "border-primary bg-primary/10"
                 : "border-border/50 hover:border-border",
               "group cursor-pointer"
             )}
-            onClick={() => onSelect(effect.type)}
-            onDoubleClick={() => onAdd(effect.type)}
+            onClick={() => handleSelect(effect.type)}
+            onDoubleClick={() => handleAdd(effect.type)}
             onMouseEnter={() => setHoveredEffect(effect.type)}
             onMouseLeave={() => setHoveredEffect(null)}
             whileHover={{ scale: 1.05 }}
@@ -195,6 +205,6 @@ export function EffectPicker({ selectedEffect, onSelect, onAdd, className }: Eff
       </motion.button>
     </div>
   );
-}
+});
 
 export { EFFECTS };

@@ -1,9 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Activity, BarChart3, Waves } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Pre-cached gradients to avoid recreation on every render
+const WAVEFORM_GRADIENT_STOPS = [
+  { offset: 0, color: "#06b6d4" },    // cyan-500
+  { offset: 0.5, color: "#8b5cf6" },  // violet-500
+  { offset: 1, color: "#ec4899" },    // pink-500
+];
+
+const BG_GRADIENT_STOPS = [
+  { offset: 0, color: "rgba(0, 0, 0, 0.95)" },
+  { offset: 1, color: "rgba(10, 10, 20, 0.95)" },
+];
 
 export type VisualizationType = 'waveform' | 'spectrum' | 'spectrogram';
 
@@ -13,12 +25,20 @@ interface AudioVisualizerProps {
   className?: string;
 }
 
-export function AudioVisualizer({ analyser, isPlaying = false, className }: AudioVisualizerProps) {
+// Memoized AudioVisualizer - prevents re-renders when parent updates but props are same
+export const AudioVisualizer = memo(function AudioVisualizer({ analyser, isPlaying = false, className }: AudioVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [visualType, setVisualType] = useState<VisualizationType>('waveform');
   const spectrogramDataRef = useRef<Uint8Array[]>([]);
   const maxSpectrogramHistory = useRef<number>(256); // Limit memory usage
+  // Cache gradients to reduce GC pressure
+  const cachedGradientsRef = useRef<{
+    bgGradient: CanvasGradient | null;
+    waveformGradient: CanvasGradient | null;
+    width: number;
+    height: number;
+  }>({ bgGradient: null, waveformGradient: null, width: 0, height: 0 });
 
   // Clear spectrogram data when visualization type changes or on unmount
   useEffect(() => {
@@ -75,14 +95,28 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
     const dataArray = new Uint8Array(bufferLength);
     const timeDataArray = new Uint8Array(bufferLength);
 
+    // Cache or create gradients - only recreate if dimensions changed
+    const cache = cachedGradientsRef.current;
+    if (cache.width !== width || cache.height !== height) {
+      // Create and cache background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+      BG_GRADIENT_STOPS.forEach(({ offset, color }) => bgGrad.addColorStop(offset, color));
+      cache.bgGradient = bgGrad;
+
+      // Create and cache waveform gradient
+      const waveGrad = ctx.createLinearGradient(0, 0, width, 0);
+      WAVEFORM_GRADIENT_STOPS.forEach(({ offset, color }) => waveGrad.addColorStop(offset, color));
+      cache.waveformGradient = waveGrad;
+
+      cache.width = width;
+      cache.height = height;
+    }
+
     const draw = () => {
       animationRef.current = requestAnimationFrame(draw);
 
-      // Clear canvas with gradient background
-      const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-      bgGradient.addColorStop(0, "rgba(0, 0, 0, 0.95)");
-      bgGradient.addColorStop(1, "rgba(10, 10, 20, 0.95)");
-      ctx.fillStyle = bgGradient;
+      // Clear canvas with cached gradient background
+      ctx.fillStyle = cache.bgGradient!;
       ctx.fillRect(0, 0, width, height);
 
       if (!isPlaying) {
@@ -117,15 +151,10 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
 
   const drawWaveform = (ctx: CanvasRenderingContext2D, data: Uint8Array, width: number, height: number) => {
     const sliceWidth = width / data.length;
-    
-    // Create gradient for waveform
-    const gradient = ctx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, "#06b6d4"); // cyan-500
-    gradient.addColorStop(0.5, "#8b5cf6"); // violet-500
-    gradient.addColorStop(1, "#ec4899"); // pink-500
 
+    // Use cached gradient for waveform
     ctx.lineWidth = 2;
-    ctx.strokeStyle = gradient;
+    ctx.strokeStyle = cachedGradientsRef.current.waveformGradient!;
     ctx.beginPath();
 
     let x = 0;
@@ -204,9 +233,10 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
     }
     spectrogramDataRef.current.push(newData);
 
-    // Limit history to prevent memory growth
-    while (spectrogramDataRef.current.length > maxHistory) {
-      spectrogramDataRef.current.shift();
+    // Circular buffer: limit history to prevent memory growth
+    // Using slice() is more efficient than shift() in a loop
+    if (spectrogramDataRef.current.length > maxHistory) {
+      spectrogramDataRef.current = spectrogramDataRef.current.slice(-maxHistory);
     }
 
     const history = spectrogramDataRef.current;
@@ -243,6 +273,11 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
     ctx.fillText("0Hz", 5, height - 5);
   };
 
+  // Memoized visualization type change handler
+  const handleVisualTypeChange = useCallback((v: string) => {
+    setVisualType(v as VisualizationType);
+  }, []);
+
   return (
     <Card className={cn("overflow-hidden", className)}>
       <CardHeader className="pb-2">
@@ -251,7 +286,7 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
             <Activity className="w-4 h-4 text-cyan-500" />
             Audio Visualization
           </CardTitle>
-          <Tabs value={visualType} onValueChange={(v) => setVisualType(v as VisualizationType)}>
+          <Tabs value={visualType} onValueChange={handleVisualTypeChange}>
             <TabsList className="h-8">
               <TabsTrigger value="waveform" className="text-xs px-2 h-6">
                 <Waves className="w-3 h-3 mr-1" />
@@ -280,4 +315,4 @@ export function AudioVisualizer({ analyser, isPlaying = false, className }: Audi
       </CardContent>
     </Card>
   );
-}
+});

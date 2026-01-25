@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { storage } from './storage';
 import { tokenConfig, securityConfig } from './config';
@@ -16,7 +17,9 @@ import {
   validateEmail,
   validatePassword,
   sanitizeString,
+  sanitizeName,
   normalizeEmail,
+  hashIpAddress,
   registrationSchema,
   loginSchema,
   challengeSchema,
@@ -41,6 +44,30 @@ const REFRESH_COOKIE_OPTIONS = {
 // Cookie names
 const ACCESS_TOKEN_COOKIE = 'auth_access_token';
 const REFRESH_TOKEN_COOKIE = 'auth_refresh_token';
+const CSRF_TOKEN_COOKIE = 'csrf_token';
+
+// CSRF cookie configuration (readable by JavaScript for double-submit pattern)
+const CSRF_COOKIE_OPTIONS = {
+  httpOnly: false, // Must be readable by JavaScript
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path: '/',
+};
+
+// CSRF token generation (256-bit cryptographically secure)
+const generateCSRFToken = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Helper to set CSRF cookie and return token for response body
+const setCSRFCookie = (res: Response): string => {
+  const csrfToken = generateCSRFToken();
+  res.cookie(CSRF_TOKEN_COOKIE, csrfToken, {
+    ...CSRF_COOKIE_OPTIONS,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+  return csrfToken;
+};
 
 // Helper to set auth cookies
 const setAuthCookies = (res: Response, accessToken: string, refreshToken: string, accessExpiresAt: Date, refreshExpiresAt: Date) => {
@@ -58,11 +85,57 @@ const setAuthCookies = (res: Response, accessToken: string, refreshToken: string
 const clearAuthCookies = (res: Response) => {
   res.clearCookie(ACCESS_TOKEN_COOKIE, { path: COOKIE_OPTIONS.path });
   res.clearCookie(REFRESH_TOKEN_COOKIE, { path: REFRESH_COOKIE_OPTIONS.path });
+  res.clearCookie(CSRF_TOKEN_COOKIE, { path: CSRF_COOKIE_OPTIONS.path });
+};
+
+/**
+ * CSRF Protection Middleware
+ * Validates CSRF token on state-changing requests (POST, PUT, DELETE, PATCH)
+ * Uses double-submit cookie pattern: compares X-CSRF-Token header with csrf_token cookie
+ */
+export const validateCSRFToken = (req: Request, res: Response, next: NextFunction) => {
+  // Skip CSRF validation for safe HTTP methods
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  const headerToken = req.headers['x-csrf-token'] as string | undefined;
+  const cookieToken = req.cookies?.[CSRF_TOKEN_COOKIE] as string | undefined;
+
+  // Both tokens must be present
+  if (!headerToken || !cookieToken) {
+    return res.status(403).json({
+      error: 'CSRF token missing',
+      message: 'Missing CSRF token. Please refresh the page and try again.',
+    });
+  }
+
+  // Tokens must match (constant-time comparison to prevent timing attacks)
+  try {
+    const headerBuffer = Buffer.from(headerToken);
+    const cookieBuffer = Buffer.from(cookieToken);
+
+    if (headerBuffer.length !== cookieBuffer.length ||
+        !crypto.timingSafeEqual(headerBuffer, cookieBuffer)) {
+      return res.status(403).json({
+        error: 'Invalid CSRF token',
+        message: 'CSRF token validation failed. Please refresh the page and try again.',
+      });
+    }
+  } catch {
+    return res.status(403).json({
+      error: 'Invalid CSRF token',
+      message: 'CSRF token validation failed. Please refresh the page and try again.',
+    });
+  }
+
+  next();
 };
 
 // Token configuration (from centralized config)
 const ACCESS_TOKEN_EXPIRY_MS = tokenConfig.accessTokenExpiryMs;
 const REFRESH_TOKEN_EXPIRY_MS = tokenConfig.refreshTokenExpiryMs;
+const ABSOLUTE_SESSION_TIMEOUT_MS = tokenConfig.absoluteSessionTimeoutMs;
 const EMAIL_VERIFICATION_EXPIRY_MS = tokenConfig.emailVerificationExpiryMs;
 const PASSWORD_RESET_EXPIRY_MS = tokenConfig.passwordResetExpiryMs;
 const ZKP_CHALLENGE_EXPIRY_MS = tokenConfig.zkpChallengeExpiryMs;
@@ -74,12 +147,50 @@ const LOCKOUT_DURATION_MS = securityConfig.lockoutDurationMs;
 const RATE_LIMIT_WINDOW_MS = securityConfig.rateLimitWindowMs;
 const RATE_LIMIT_MAX_REQUESTS = securityConfig.rateLimitMaxRequests;
 
+// Credential stuffing prevention configuration
+const EMAIL_FAILED_LOGIN_WINDOW_MS = securityConfig.emailFailedLoginWindowMs;
+const EMAIL_MAX_FAILED_ATTEMPTS = securityConfig.emailMaxFailedAttempts;
+const EMAIL_ACTION_WINDOW_MS = securityConfig.emailActionWindowMs;
+const EMAIL_MAX_ACTION_REQUESTS = securityConfig.emailMaxActionRequests;
+
+// Graduated backoff configuration
+const BACKOFF_BASE_DELAY_MS = securityConfig.backoffBaseDelayMs;
+const BACKOFF_MAX_DELAY_MS = securityConfig.backoffMaxDelayMs;
+const BACKOFF_MULTIPLIER = securityConfig.backoffMultiplier;
+
+// Global auth rate limiting
+const GLOBAL_AUTH_RATE_LIMIT_WINDOW_MS = securityConfig.globalAuthRateLimitWindowMs;
+const GLOBAL_AUTH_RATE_LIMIT_MAX_REQUESTS = securityConfig.globalAuthRateLimitMaxRequests;
+const SENSITIVE_ENDPOINT_MAX_REQUESTS = securityConfig.sensitiveEndpointMaxRequests;
+const SENSITIVE_ENDPOINT_WINDOW_MS = securityConfig.sensitiveEndpointWindowMs;
+
 // In-memory stores with max size limits to prevent unbounded growth
 const MAX_ACCESS_TOKENS = 10000; // Max concurrent sessions
 const MAX_RATE_LIMIT_ENTRIES = 5000;
+const MAX_EMAIL_TRACKING_ENTRIES = 10000;
 const accessTokenStore = new Map<string, { userId: string; expiresAt: Date }>();
 const rateLimitStore = new Map<string, { count: number; resetAt: Date }>();
 const emailRateLimitStore = new Map<string, { count: number; resetAt: Date }>();
+
+// Per-email failed login tracking (24h window for credential stuffing prevention)
+interface EmailFailedLoginTracking {
+  attempts: number;
+  firstAttemptAt: Date;
+  lastAttemptAt: Date;
+  consecutiveFailures: number; // For graduated backoff
+  lockedUntil?: Date;
+}
+const emailFailedLoginStore = new Map<string, EmailFailedLoginTracking>();
+
+// Per-email action rate limiting (verification, password reset)
+interface EmailActionTracking {
+  count: number;
+  resetAt: Date;
+}
+const emailActionStore = new Map<string, EmailActionTracking>();
+
+// Sensitive endpoint rate limiting (login, register, reset - stricter limits)
+const sensitiveEndpointStore = new Map<string, { count: number; resetAt: Date }>();
 
 // Evict oldest entries when store reaches max size (LRU-style)
 const evictOldestIfNeeded = <K, V>(store: Map<K, V>, maxSize: number): void => {
@@ -97,6 +208,26 @@ const evictOldestIfNeeded = <K, V>(store: Map<K, V>, maxSize: number): void => {
 // Per-email rate limiting configuration
 const EMAIL_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_RATE_LIMIT_MAX_ATTEMPTS = 5; // Max registration/reset attempts per email per hour
+
+/**
+ * Invalidate all in-memory access tokens for a specific user.
+ * Called on password reset, account compromise, or forced logout.
+ * This is critical for security - refresh token deletion alone is not enough
+ * since in-memory access tokens remain valid until they expire.
+ */
+const invalidateAccessTokensForUser = (userId: string): number => {
+  let invalidatedCount = 0;
+  for (const [token, data] of accessTokenStore.entries()) {
+    if (data.userId === userId) {
+      accessTokenStore.delete(token);
+      invalidatedCount++;
+    }
+  }
+  if (invalidatedCount > 0) {
+    console.log(`[Auth] Invalidated ${invalidatedCount} access token(s) for user ${userId}`);
+  }
+  return invalidatedCount;
+};
 
 // Helper functions
 const hashPassword = async (password: string): Promise<string> => {
@@ -141,6 +272,15 @@ const getClientIP = (req: Request): string => {
     'unknown';
 };
 
+/**
+ * Get hashed client IP for GDPR-compliant storage in login_attempts
+ * The hash allows for rate limiting and analytics without storing raw IPs
+ */
+const getHashedClientIP = (req: Request): string => {
+  const rawIP = getClientIP(req);
+  return hashIpAddress(rawIP);
+};
+
 // Check per-email rate limit
 const checkEmailRateLimit = (email: string): { allowed: boolean; retryAfter?: number } => {
   const normalizedEmail = normalizeEmail(email);
@@ -174,7 +314,234 @@ const checkEmailRateLimit = (email: string): { allowed: boolean; retryAfter?: nu
   return { allowed: true };
 };
 
+// =============================================================================
+// CREDENTIAL STUFFING PREVENTION (Phase 2.3)
+// =============================================================================
+
+/**
+ * Calculate graduated backoff delay based on consecutive failures.
+ * Uses exponential backoff: baseDelay * (multiplier ^ failures)
+ * Capped at maxDelay to prevent excessive wait times.
+ *
+ * Backoff schedule (with default config):
+ * - 1st failure: 1s
+ * - 2nd failure: 2s
+ * - 3rd failure: 4s
+ * - 4th failure: 8s
+ * - 5th failure: 16s (account locked for 24h after this)
+ */
+const calculateBackoffDelay = (consecutiveFailures: number): number => {
+  if (consecutiveFailures <= 0) return 0;
+  const delay = BACKOFF_BASE_DELAY_MS * Math.pow(BACKOFF_MULTIPLIER, consecutiveFailures - 1);
+  return Math.min(delay, BACKOFF_MAX_DELAY_MS);
+};
+
+/**
+ * Check if login attempt is allowed for an email (24h window).
+ * Implements per-email rate limiting to prevent credential stuffing attacks.
+ *
+ * @returns { allowed, retryAfter, backoffDelay, remainingAttempts }
+ */
+const trackEmailFailedLogin = (email: string): {
+  allowed: boolean;
+  retryAfter?: number;
+  backoffDelay?: number;
+  remainingAttempts?: number;
+} => {
+  const normalizedEmail = normalizeEmail(email);
+  const now = new Date();
+
+  // Evict oldest entries if needed
+  evictOldestIfNeeded(emailFailedLoginStore, MAX_EMAIL_TRACKING_ENTRIES);
+
+  let tracking = emailFailedLoginStore.get(normalizedEmail);
+
+  // Check if currently locked due to graduated backoff
+  if (tracking?.lockedUntil && tracking.lockedUntil > now) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((tracking.lockedUntil.getTime() - now.getTime()) / 1000),
+    };
+  }
+
+  // Reset if 24h window has passed
+  if (tracking && (now.getTime() - tracking.firstAttemptAt.getTime() > EMAIL_FAILED_LOGIN_WINDOW_MS)) {
+    emailFailedLoginStore.delete(normalizedEmail);
+    tracking = undefined;
+  }
+
+  if (!tracking) {
+    // No tracking yet - allow the attempt
+    return { allowed: true, remainingAttempts: EMAIL_MAX_FAILED_ATTEMPTS };
+  }
+
+  // Check if max attempts exceeded in 24h window
+  if (tracking.attempts >= EMAIL_MAX_FAILED_ATTEMPTS) {
+    const windowResetTime = new Date(tracking.firstAttemptAt.getTime() + EMAIL_FAILED_LOGIN_WINDOW_MS);
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((windowResetTime.getTime() - now.getTime()) / 1000),
+      remainingAttempts: 0,
+    };
+  }
+
+  // Calculate graduated backoff delay
+  const backoffDelay = calculateBackoffDelay(tracking.consecutiveFailures);
+  const backoffUntil = new Date(tracking.lastAttemptAt.getTime() + backoffDelay);
+
+  if (backoffDelay > 0 && backoffUntil > now) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((backoffUntil.getTime() - now.getTime()) / 1000),
+      backoffDelay: Math.ceil(backoffDelay / 1000),
+      remainingAttempts: EMAIL_MAX_FAILED_ATTEMPTS - tracking.attempts,
+    };
+  }
+
+  return {
+    allowed: true,
+    backoffDelay: backoffDelay > 0 ? Math.ceil(backoffDelay / 1000) : undefined,
+    remainingAttempts: EMAIL_MAX_FAILED_ATTEMPTS - tracking.attempts,
+  };
+};
+
+/**
+ * Record a failed login attempt for an email.
+ * Implements graduated backoff by tracking consecutive failures.
+ */
+const recordEmailFailedLogin = (email: string): void => {
+  const normalizedEmail = normalizeEmail(email);
+  const now = new Date();
+
+  let tracking = emailFailedLoginStore.get(normalizedEmail);
+
+  // Reset if 24h window has passed
+  if (tracking && (now.getTime() - tracking.firstAttemptAt.getTime() > EMAIL_FAILED_LOGIN_WINDOW_MS)) {
+    tracking = undefined;
+  }
+
+  if (!tracking) {
+    tracking = {
+      attempts: 1,
+      firstAttemptAt: now,
+      lastAttemptAt: now,
+      consecutiveFailures: 1,
+    };
+  } else {
+    tracking.attempts++;
+    tracking.lastAttemptAt = now;
+    tracking.consecutiveFailures++;
+
+    // Apply graduated backoff lock
+    const backoffDelay = calculateBackoffDelay(tracking.consecutiveFailures);
+    if (backoffDelay > 0) {
+      tracking.lockedUntil = new Date(now.getTime() + backoffDelay);
+    }
+  }
+
+  emailFailedLoginStore.set(normalizedEmail, tracking);
+};
+
+/**
+ * Clear failed login tracking for an email (on successful login).
+ */
+const clearEmailFailedLogin = (email: string): void => {
+  const normalizedEmail = normalizeEmail(email);
+  emailFailedLoginStore.delete(normalizedEmail);
+};
+
+/**
+ * Rate limit verification endpoints (resend-verification, forgot-password).
+ * Prevents email spam by limiting requests per email per hour.
+ * Default: 3 requests per email per hour.
+ */
+const checkEmailActionRateLimit = (email: string, action: string): {
+  allowed: boolean;
+  retryAfter?: number;
+} => {
+  const normalizedEmail = normalizeEmail(email);
+  const key = `${action}:${normalizedEmail}`;
+  const now = new Date();
+
+  evictOldestIfNeeded(emailActionStore, MAX_RATE_LIMIT_ENTRIES);
+
+  const tracking = emailActionStore.get(key);
+
+  if (!tracking || tracking.resetAt < now) {
+    emailActionStore.set(key, {
+      count: 1,
+      resetAt: new Date(now.getTime() + EMAIL_ACTION_WINDOW_MS),
+    });
+    return { allowed: true };
+  }
+
+  if (tracking.count >= EMAIL_MAX_ACTION_REQUESTS) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((tracking.resetAt.getTime() - now.getTime()) / 1000),
+    };
+  }
+
+  tracking.count++;
+  return { allowed: true };
+};
+
+/**
+ * Strict rate limiting for sensitive endpoints (login, register, password reset).
+ * More restrictive than general rate limiting to prevent brute force.
+ * Default: 5 requests per IP per 5 minutes for sensitive operations.
+ */
+const checkSensitiveEndpointRateLimit = (ip: string): {
+  allowed: boolean;
+  retryAfter?: number;
+} => {
+  const now = new Date();
+
+  evictOldestIfNeeded(sensitiveEndpointStore, MAX_RATE_LIMIT_ENTRIES);
+
+  const tracking = sensitiveEndpointStore.get(ip);
+
+  if (!tracking || tracking.resetAt < now) {
+    sensitiveEndpointStore.set(ip, {
+      count: 1,
+      resetAt: new Date(now.getTime() + SENSITIVE_ENDPOINT_WINDOW_MS),
+    });
+    return { allowed: true };
+  }
+
+  if (tracking.count >= SENSITIVE_ENDPOINT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((tracking.resetAt.getTime() - now.getTime()) / 1000),
+    };
+  }
+
+  tracking.count++;
+  return { allowed: true };
+};
+
+/**
+ * Middleware for sensitive endpoints with combined rate limiting.
+ * Applies stricter IP-based limits for login/register/reset endpoints.
+ */
+const sensitiveEndpointRateLimiter = (req: Request, res: Response, next: NextFunction) => {
+  const ip = getClientIP(req);
+
+  // Check sensitive endpoint rate limit
+  const sensitiveLimit = checkSensitiveEndpointRateLimit(ip);
+  if (!sensitiveLimit.allowed) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      message: 'Too many authentication attempts. Please wait before trying again.',
+      retryAfter: sensitiveLimit.retryAfter,
+    });
+  }
+
+  next();
+};
+
 // Log audit event helper
+// Note: Uses hashed IP for GDPR compliance in audit logs
 const logAuditEvent = async (
   action: string,
   req: Request,
@@ -191,7 +558,7 @@ const logAuditEvent = async (
       resource,
       resourceId,
       changes,
-      ipAddress: getClientIP(req),
+      ipAddress: getHashedClientIP(req),
       userAgent: req.headers['user-agent'],
       metadata,
     });
@@ -254,26 +621,52 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
   next();
 };
 
-// Clean up expired tokens periodically
+// Clean up expired tokens and rate limit entries periodically
 setInterval(() => {
   const now = new Date();
+
+  // Clean up expired access tokens
   for (const [token, data] of accessTokenStore.entries()) {
     if (data.expiresAt < now) {
       accessTokenStore.delete(token);
     }
   }
-  // Clean up rate limit entries
+
+  // Clean up IP rate limit entries
   for (const [key, data] of rateLimitStore.entries()) {
     if (data.resetAt < now) {
       rateLimitStore.delete(key);
     }
   }
-  // Clean up email rate limit entries
+
+  // Clean up email registration rate limit entries
   for (const [email, data] of emailRateLimitStore.entries()) {
     if (data.resetAt < now) {
       emailRateLimitStore.delete(email);
     }
   }
+
+  // Clean up per-email failed login tracking (24h window)
+  for (const [email, data] of emailFailedLoginStore.entries()) {
+    if (now.getTime() - data.firstAttemptAt.getTime() > EMAIL_FAILED_LOGIN_WINDOW_MS) {
+      emailFailedLoginStore.delete(email);
+    }
+  }
+
+  // Clean up email action rate limit entries (verification, password reset)
+  for (const [key, data] of emailActionStore.entries()) {
+    if (data.resetAt < now) {
+      emailActionStore.delete(key);
+    }
+  }
+
+  // Clean up sensitive endpoint rate limit entries
+  for (const [ip, data] of sensitiveEndpointStore.entries()) {
+    if (data.resetAt < now) {
+      sensitiveEndpointStore.delete(ip);
+    }
+  }
+
   // Clean up expired ZKP challenges
   storage.deleteExpiredZKPChallenges().catch(console.error);
 }, 60000);
@@ -283,8 +676,12 @@ setInterval(() => {
 /**
  * Register with ZKP
  * Client sends pre-computed ZKP commitment (public key + salt)
+ *
+ * SECURITY (Phase 2.3):
+ * - IP-based sensitive endpoint rate limiting (5 per 5 minutes)
+ * - Per-email rate limiting for registration attempts
  */
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', sensitiveEndpointRateLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, zkpCommitment, firstName, lastName } = req.body;
 
@@ -337,8 +734,9 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    const sanitizedFirstName = sanitizeString(firstName || '');
-    const sanitizedLastName = sanitizeString(lastName || '');
+    // Use sanitizeName for XSS prevention - HTML-escapes in addition to control char removal
+    const sanitizedFirstName = sanitizeName(firstName || '');
+    const sanitizedLastName = sanitizeName(lastName || '');
     const username = normalizedEmail.split('@')[0] + '_' + Date.now();
 
     // Handle ZKP commitment or generate from password
@@ -386,16 +784,18 @@ router.post('/register', async (req: Request, res: Response) => {
     const tokens = await createTokenPair(user.id);
 
     // Log successful registration
-    await storage.recordLoginAttempt(normalizedEmail, true, getClientIP(req), req.headers['user-agent']);
+    await storage.recordLoginAttempt(normalizedEmail, true, getHashedClientIP(req), req.headers['user-agent']);
     await logAuditEvent('auth.register.success', req, user.id, 'user', user.id, undefined, { email: normalizedEmail });
 
     // Set HttpOnly cookies for XSS protection
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     res.status(201).json({
       user: sanitizeUser({ ...user, zkpPublicKey: commitment.publicKey, zkpSalt: commitment.salt }),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       zkpSalt: commitment.salt, // Return salt so client can generate proofs
       requiresVerification: !user.emailVerified,
       message: 'Registration successful. Please verify your email.',
@@ -488,7 +888,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     const user = await storage.getUserByEmail(email);
 
     if (!user) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'User not found');
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'User not found');
       return res.status(401).json({
         error: 'Invalid credentials',
         message: 'Email or password is incorrect',
@@ -497,7 +897,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
 
     // Check if account is locked
     if (await storage.isAccountLocked(user.id)) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'Account locked');
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'Account locked');
       return res.status(423).json({
         error: 'Account locked',
         message: 'Too many failed attempts. Please try again later.',
@@ -508,7 +908,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     const storedChallenge = await storage.getZKPChallenge(proof.sessionId);
 
     if (!storedChallenge || storedChallenge.userId !== user.id) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'Invalid challenge');
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'Invalid challenge');
       const failedAttempts = await storage.incrementFailedAttempts(user.id);
 
       if (failedAttempts >= MAX_LOGIN_ATTEMPTS) {
@@ -524,7 +924,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
 
     // Verify ZKP proof
     if (!user.zkpPublicKey || !user.zkpSalt) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'No ZKP credentials');
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'No ZKP credentials');
       return res.status(401).json({
         error: 'Invalid credentials',
         message: 'Email or password is incorrect',
@@ -542,7 +942,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     await storage.deleteZKPChallenge(proof.sessionId);
 
     if (!isValid) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'Invalid proof');
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'Invalid proof');
       const failedAttempts = await storage.incrementFailedAttempts(user.id);
 
       if (failedAttempts >= MAX_LOGIN_ATTEMPTS) {
@@ -563,18 +963,20 @@ router.post('/login/verify', async (req: Request, res: Response) => {
 
     // Success! Reset failed attempts
     await storage.resetFailedAttempts(user.id);
-    await storage.recordLoginAttempt(email, true, getClientIP(req), req.headers['user-agent']);
+    await storage.recordLoginAttempt(email, true, getHashedClientIP(req), req.headers['user-agent']);
 
     const tokens = await createTokenPair(user.id);
 
     // Set HttpOnly cookies for XSS protection
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     if (!user.emailVerified) {
       return res.json({
         user: sanitizeUser(user),
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        csrfToken,
         requiresVerification: true,
         message: 'Login successful. Please verify your email.',
       });
@@ -584,6 +986,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
       user: sanitizeUser(user),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       message: 'Login successful',
     });
   } catch (error) {
@@ -598,8 +1001,14 @@ router.post('/login/verify', async (req: Request, res: Response) => {
 /**
  * Legacy login (backward compatible - uses password directly)
  * Falls back to bcrypt if ZKP not set up
+ *
+ * SECURITY FEATURES (Phase 2.3):
+ * - Per-email rate limiting: 5 failed attempts per 24h window
+ * - Graduated backoff: Exponential delays after failures (1s, 2s, 4s, 8s, 16s...)
+ * - IP-based sensitive endpoint rate limiting
+ * - Account lockout after 5 consecutive failures
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', sensitiveEndpointRateLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -610,22 +1019,42 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // Check per-email rate limit with graduated backoff (24h window)
+    const emailRateCheck = trackEmailFailedLogin(email);
+    if (!emailRateCheck.allowed) {
+      await logAuditEvent('auth.login.rate_limited', req, undefined, 'user', undefined, undefined, {
+        email: normalizeEmail(email),
+        reason: 'email_rate_limit',
+      });
+      return res.status(429).json({
+        error: 'Too many attempts',
+        message: emailRateCheck.remainingAttempts === 0
+          ? 'Maximum login attempts exceeded. Please try again later or reset your password.'
+          : 'Please wait before trying again.',
+        retryAfter: emailRateCheck.retryAfter,
+        backoffDelay: emailRateCheck.backoffDelay,
+      });
+    }
+
     const user = await storage.getUserByEmail(email);
 
     if (!user) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'User not found');
+      // Record failed attempt for rate limiting (even if user doesn't exist)
+      recordEmailFailedLogin(email);
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'User not found');
       return res.status(401).json({
         error: 'Invalid credentials',
         message: 'Email or password is incorrect',
       });
     }
 
-    // Check if account is locked
+    // Check if account is locked (per-user lockout)
     if (await storage.isAccountLocked(user.id)) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'Account locked');
+      recordEmailFailedLogin(email);
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'Account locked');
       return res.status(423).json({
         error: 'Account locked',
-        message: 'Too many failed attempts. Please try again later.',
+        message: 'Too many failed attempts. Please try again later or reset your password.',
       });
     }
 
@@ -633,39 +1062,51 @@ router.post('/login', async (req: Request, res: Response) => {
     const passwordValid = await verifyPassword(password, user.password);
 
     if (!passwordValid) {
-      await storage.recordLoginAttempt(email, false, getClientIP(req), req.headers['user-agent'], 'Invalid password');
+      // Record failed attempt for both per-email and per-account tracking
+      recordEmailFailedLogin(email);
+      await storage.recordLoginAttempt(email, false, getHashedClientIP(req), req.headers['user-agent'], 'Invalid password');
       const failedAttempts = await storage.incrementFailedAttempts(user.id);
 
       if (failedAttempts >= MAX_LOGIN_ATTEMPTS) {
         const lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
         await storage.lockAccount(user.id, lockUntil);
+        await logAuditEvent('auth.login.account_locked', req, user.id, 'user', user.id, undefined, {
+          email: normalizeEmail(email),
+          reason: 'max_attempts_exceeded',
+        });
         return res.status(423).json({
           error: 'Account locked',
           message: 'Too many failed attempts. Account locked for 15 minutes.',
         });
       }
 
+      // Include backoff info in response
+      const currentTracking = trackEmailFailedLogin(email);
       return res.status(401).json({
         error: 'Invalid credentials',
         message: 'Email or password is incorrect',
-        attemptsRemaining: MAX_LOGIN_ATTEMPTS - failedAttempts,
+        attemptsRemaining: Math.min(MAX_LOGIN_ATTEMPTS - failedAttempts, currentTracking.remainingAttempts || 0),
+        backoffDelay: currentTracking.backoffDelay,
       });
     }
 
-    // Success! Reset failed attempts
+    // Success! Clear all rate limiting for this email
+    clearEmailFailedLogin(email);
     await storage.resetFailedAttempts(user.id);
-    await storage.recordLoginAttempt(email, true, getClientIP(req), req.headers['user-agent']);
+    await storage.recordLoginAttempt(email, true, getHashedClientIP(req), req.headers['user-agent']);
 
     const tokens = await createTokenPair(user.id);
 
     // Set HttpOnly cookies for XSS protection
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     if (!user.emailVerified) {
       return res.json({
         user: sanitizeUser(user),
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        csrfToken,
         zkpSalt: user.zkpSalt, // Include salt for ZKP upgrade
         requiresVerification: true,
         message: 'Login successful. Please verify your email.',
@@ -676,6 +1117,7 @@ router.post('/login', async (req: Request, res: Response) => {
       user: sanitizeUser(user),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       zkpSalt: user.zkpSalt, // Include salt for ZKP upgrade
       message: 'Login successful',
     });
@@ -791,15 +1233,36 @@ router.post('/refresh', async (req: Request, res: Response) => {
       });
     }
 
+    // SECURITY: Enforce absolute session timeout (24 hours from initial login)
+    // This limits the exposure window if tokens are compromised.
+    // The session cannot be extended beyond this time regardless of refresh activity.
+    const sessionAge = Date.now() - storedToken.createdAt.getTime();
+    if (sessionAge > ABSOLUTE_SESSION_TIMEOUT_MS) {
+      // Session has exceeded absolute timeout - user must re-authenticate
+      await storage.deleteRefreshToken(refreshToken);
+      clearAuthCookies(res);
+
+      console.log(`[Auth] Absolute session timeout enforced for user ${storedToken.userId} (session age: ${Math.floor(sessionAge / 1000 / 60)} minutes)`);
+
+      return res.status(401).json({
+        error: 'Session expired',
+        message: 'Your session has expired. Please log in again for security.',
+        code: 'ABSOLUTE_SESSION_TIMEOUT',
+      });
+    }
+
+    // Token rotation: Delete old refresh token and issue new pair
     await storage.deleteRefreshToken(refreshToken);
     const tokens = await createTokenPair(storedToken.userId);
 
     // Set new HttpOnly cookies
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     res.json({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       message: 'Token refreshed',
     });
   } catch (error) {
@@ -846,12 +1309,14 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     // Set HttpOnly cookies for XSS protection
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     res.json({
       success: true,
       user: sanitizeUser(user),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       message: 'Email verified successfully',
     });
   } catch (error) {
@@ -863,7 +1328,12 @@ router.post('/verify-email', async (req: Request, res: Response) => {
   }
 });
 
-// Resend verification email
+/**
+ * Resend verification email
+ *
+ * SECURITY (Phase 2.3): Rate limited to 3 requests per email per hour
+ * to prevent email spam attacks.
+ */
 router.post('/resend-verification', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -872,6 +1342,19 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
       return res.status(400).json({
         error: 'Missing email',
         message: 'Email is required',
+      });
+    }
+
+    // Check email action rate limit (3 per hour per email)
+    const actionRateLimit = checkEmailActionRateLimit(email, 'resend-verification');
+    if (!actionRateLimit.allowed) {
+      await logAuditEvent('auth.resend_verification.rate_limited', req, undefined, 'user', undefined, undefined, {
+        email: normalizeEmail(email),
+      });
+      return res.status(429).json({
+        error: 'Too many requests',
+        message: 'Too many verification email requests. Please wait before trying again.',
+        retryAfter: actionRateLimit.retryAfter,
       });
     }
 
@@ -917,8 +1400,15 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
   }
 });
 
-// Forgot password
-router.post('/forgot-password', async (req: Request, res: Response) => {
+/**
+ * Forgot password - initiate password reset flow
+ *
+ * SECURITY (Phase 2.3):
+ * - Rate limited to 3 requests per email per hour to prevent email spam
+ * - IP-based sensitive endpoint rate limiting
+ * - Does not reveal if email exists (same response either way)
+ */
+router.post('/forgot-password', sensitiveEndpointRateLimiter, async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
 
@@ -929,9 +1419,23 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       });
     }
 
+    // Check email action rate limit (3 per hour per email)
+    const actionRateLimit = checkEmailActionRateLimit(email, 'forgot-password');
+    if (!actionRateLimit.allowed) {
+      await logAuditEvent('auth.forgot_password.rate_limited', req, undefined, 'user', undefined, undefined, {
+        email: normalizeEmail(email),
+      });
+      return res.status(429).json({
+        error: 'Too many requests',
+        message: 'Too many password reset requests. Please wait before trying again.',
+        retryAfter: actionRateLimit.retryAfter,
+      });
+    }
+
     const user = await storage.getUserByEmail(email);
 
     if (!user) {
+      // Don't reveal if email exists - return same response
       return res.json({
         success: true,
         message: 'If the email exists, a password reset link will be sent',
@@ -964,8 +1468,15 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   }
 });
 
-// Reset password
-router.post('/reset-password', async (req: Request, res: Response) => {
+/**
+ * Reset password - complete password reset with token
+ *
+ * SECURITY (Phase 2.3):
+ * - IP-based sensitive endpoint rate limiting
+ * - Clears per-email failed login tracking on successful reset
+ * - Invalidates all existing sessions
+ */
+router.post('/reset-password', sensitiveEndpointRateLimiter, async (req: Request, res: Response) => {
   try {
     const { token, password, zkpCommitment } = req.body;
 
@@ -1019,18 +1530,28 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     await storage.deletePasswordResetTokensForUser(user.id);
     await storage.deleteRefreshTokensForUser(user.id);
+
+    // SECURITY: Invalidate ALL in-memory access tokens for this user
+    // This ensures no existing sessions remain valid after password change
+    invalidateAccessTokensForUser(user.id);
+
+    // Clear per-email failed login tracking (user proved ownership via reset email)
+    clearEmailFailedLogin(user.email);
+
     await storage.resetFailedAttempts(user.id); // Unlock account on password reset
 
     const tokens = await createTokenPair(user.id);
 
     // Set HttpOnly cookies for XSS protection
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt);
+    const csrfToken = setCSRFCookie(res);
 
     res.json({
       success: true,
       user: sanitizeUser(user),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      csrfToken,
       zkpSalt: commitment.salt,
       message: 'Password reset successfully',
     });
@@ -1042,6 +1563,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Export for use by admin endpoints (forced logout, account compromise)
+export { invalidateAccessTokensForUser };
 
 export default router;
 

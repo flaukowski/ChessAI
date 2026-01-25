@@ -3,7 +3,7 @@
  * UI for recording processed audio in the studio
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Circle, Square, Pause, Play, Save, X, Loader2, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,8 @@ interface RecordingControlsProps {
   className?: string;
 }
 
-export function RecordingControls({
+// Memoized RecordingControls - prevents re-renders when parent updates but props are same
+export const RecordingControls = memo(function RecordingControls({
   audioContext,
   outputNode,
   effectChain,
@@ -341,6 +342,6 @@ export function RecordingControls({
       </Dialog>
     </>
   );
-}
+});
 
 export default RecordingControls;

@@ -3,7 +3,7 @@
  * Full-featured audio effects pedalboard with drag-and-drop, presets, and export
  */
 
-import { useState, useRef, useCallback, memo } from 'react';
+import { useState, useRef, useCallback, memo, useMemo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -442,7 +442,8 @@ interface PedalboardProps {
   className?: string;
 }
 
-export function Pedalboard({
+// Memoized Pedalboard - main container for effect chain
+export const Pedalboard = memo(function Pedalboard({
   effects,
   inputGain,
   outputGain,
@@ -467,6 +468,7 @@ export function Pedalboard({
   const [importJson, setImportJson] = useState('');
   const [shareUrl, setShareUrl] = useState('');
 
+  // Memoize sensors configuration to prevent unnecessary recreations
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -477,6 +479,9 @@ export function Pedalboard({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Memoize effect IDs for SortableContext to prevent unnecessary re-renders
+  const effectIds = useMemo(() => effects.map((e) => e.id), [effects]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -813,7 +818,7 @@ export function Pedalboard({
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={effects.map((e) => e.id)}
+                items={effectIds}
                 strategy={verticalListSortingStrategy}
               >
                 <div className="space-y-2">
@@ -837,4 +842,4 @@ export function Pedalboard({
       </Card>
     </div>
   );
-}
+});

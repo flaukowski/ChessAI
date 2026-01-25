@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -6,12 +6,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Plus, 
-  Trash2, 
-  Waves, 
-  Radio, 
-  Disc, 
+import {
+  Plus,
+  Trash2,
+  Waves,
+  Radio,
+  Disc,
   AudioLines,
   ChevronDown,
   ChevronUp,
@@ -121,7 +121,8 @@ const gradientToKnobColor: Record<string, string> = {
   'from-teal-500 to-cyan-500': 'cyan',
 };
 
-function EffectCard({ effect, config, viewMode, onRemove, onToggle, onParamChange }: EffectCardProps) {
+// Memoized EffectCard - prevents re-renders when parent updates but effect props are the same
+const EffectCard = memo(function EffectCard({ effect, config, viewMode, onRemove, onToggle, onParamChange }: EffectCardProps) {
   const [expanded, setExpanded] = useState(true);
   const knobColor = gradientToKnobColor[config.color] || 'cyan';
 
@@ -221,7 +222,7 @@ function EffectCard({ effect, config, viewMode, onRemove, onToggle, onParamChang
       )}
     </Card>
   );
-}
+});
 
 interface EffectsRackProps {
   className?: string;

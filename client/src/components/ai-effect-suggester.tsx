@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -174,7 +174,8 @@ const ADVANCED_PRESETS: Record<string, EffectSuggestion[]> = {
   ],
 };
 
-export function AIEffectSuggester({
+// Memoized AIEffectSuggester - prevents re-renders when parent updates but props are same
+export const AIEffectSuggester = memo(function AIEffectSuggester({
   analyser,
   onApplySuggestion,
   onApplyChain,
@@ -223,15 +224,24 @@ export function AIEffectSuggester({
     setIsAnalyzing(false);
   }, [analyser, currentGenre]);
 
-  const handleApply = (suggestion: EffectSuggestion) => {
+  // Memoized handler to prevent child re-renders
+  const handleApply = useCallback((suggestion: EffectSuggestion) => {
     onApplySuggestion(suggestion.type, suggestion.params);
-  };
+  }, [onApplySuggestion]);
 
-  const getConfidenceColor = (confidence: number) => {
+  // Memoized confidence color helper
+  const getConfidenceColor = useCallback((confidence: number) => {
     if (confidence >= 0.85) return "bg-green-500/20 text-green-400 border-green-500/30";
     if (confidence >= 0.7) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
     return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-  };
+  }, []);
+
+  // Memoized handler for applying all suggestions
+  const handleApplyAll = useCallback(() => {
+    if (onApplyChain) {
+      onApplyChain(suggestions);
+    }
+  }, [onApplyChain, suggestions]);
 
   return (
     <Card className={cn("", className)}>
@@ -312,7 +322,7 @@ export function AIEffectSuggester({
             {onApplyChain && suggestions.length > 1 && (
               <Button
                 className="w-full mt-3"
-                onClick={() => onApplyChain(suggestions)}
+                onClick={handleApplyAll}
               >
                 <Play className="w-4 h-4 mr-2" />
                 Apply All ({suggestions.length} effects)
@@ -323,4 +333,4 @@ export function AIEffectSuggester({
       </CardContent>
     </Card>
   );
-}
+});

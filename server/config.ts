@@ -67,6 +67,14 @@ export const tokenConfig = {
   /** Refresh token expiry in milliseconds (7 days) */
   refreshTokenExpiryMs: 7 * 24 * 60 * 60 * 1000,
 
+  /**
+   * Absolute session timeout in milliseconds (24 hours).
+   * Session cannot be extended beyond this time from initial login,
+   * regardless of refresh token activity. User must re-authenticate.
+   * This limits the exposure window if tokens are compromised.
+   */
+  absoluteSessionTimeoutMs: 24 * 60 * 60 * 1000,
+
   /** Email verification token expiry in milliseconds (24 hours) */
   emailVerificationExpiryMs: 24 * 60 * 60 * 1000,
 
@@ -99,6 +107,51 @@ export const securityConfig = {
 
   /** Request body size limit */
   requestSizeLimit: '1mb',
+
+  // =========================================================================
+  // CREDENTIAL STUFFING PREVENTION (Phase 2.3)
+  // =========================================================================
+
+  /** Per-email failed login tracking window (24 hours) */
+  emailFailedLoginWindowMs: 24 * 60 * 60 * 1000,
+
+  /** Maximum failed login attempts per email in 24h window */
+  emailMaxFailedAttempts: 5,
+
+  /** Per-email verification/reset request window (1 hour) */
+  emailActionWindowMs: 60 * 60 * 1000,
+
+  /** Maximum verification/reset requests per email per hour */
+  emailMaxActionRequests: 3,
+
+  // =========================================================================
+  // GRADUATED BACKOFF CONFIGURATION
+  // =========================================================================
+
+  /** Base delay in milliseconds for graduated backoff (1 second) */
+  backoffBaseDelayMs: 1000,
+
+  /** Maximum delay in milliseconds (5 minutes) */
+  backoffMaxDelayMs: 5 * 60 * 1000,
+
+  /** Exponential backoff multiplier */
+  backoffMultiplier: 2,
+
+  // =========================================================================
+  // GLOBAL AUTH RATE LIMITING
+  // =========================================================================
+
+  /** Global auth endpoint rate limit window (1 minute) */
+  globalAuthRateLimitWindowMs: 60 * 1000,
+
+  /** Global auth endpoint max requests per window per IP */
+  globalAuthRateLimitMaxRequests: 30,
+
+  /** Strict rate limit for sensitive endpoints (login, register, reset) */
+  sensitiveEndpointMaxRequests: 5,
+
+  /** Strict rate limit window for sensitive endpoints (5 minutes) */
+  sensitiveEndpointWindowMs: 5 * 60 * 1000,
 } as const;
 
 // =============================================================================
