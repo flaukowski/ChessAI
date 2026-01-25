@@ -31,3 +31,9 @@ export * from './wav-export';
 // DSP utilities adapted from dspml/dspc
 export * from './window-functions';
 export * from './remez-fir';
+
+// IR loading for convolution reverb
+export * from './ir-loader';
+
+// Spatial audio engine with HRTF binaural panning
+export * from './effects/spatial-audio';

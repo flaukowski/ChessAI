@@ -12,6 +12,7 @@ import stripeRoutes from "./stripe";
 import socialRoutes from "./social";
 import workspacesRoutes from "./workspaces";
 import analyticsRoutes from "./analytics";
+import jamSessionsRoutes, { setupJamSessionsWebSocket } from "./jam-sessions";
 import express from "express";
 import path from "path";
 
@@ -49,8 +50,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/v1/billing", stripeRoutes);
   app.use("/api/v1/social", socialRoutes);
   app.use("/api/v1/workspaces", workspacesRoutes);
+  app.use("/api/v1/jam-sessions", jamSessionsRoutes);
   app.use("/api/v1", analyticsRoutes);
-  
+
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
@@ -77,5 +79,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // Initialize WebSocket signaling for jam sessions
+  setupJamSessionsWebSocket(httpServer);
+
   return httpServer;
 }

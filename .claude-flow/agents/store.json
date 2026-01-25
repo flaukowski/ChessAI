@@ -1,0 +1,51 @@
+{
+  "agents": {
+    "flow-queen": {
+      "agentId": "flow-queen",
+      "agentType": "coordinator",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "queen",
+        "swarmId": "swarm-1769383956433",
+        "hiveMind": "hive-1769383956771-daglgv",
+        "capabilities": [
+          "spawn",
+          "coordinate",
+          "evolve",
+          "dream"
+        ],
+        "model": "opus"
+      },
+      "createdAt": "2026-01-25T23:32:53.118Z",
+      "domain": "orchestration",
+      "model": "opus",
+      "modelRoutedBy": "explicit"
+    },
+    "qe-queen": {
+      "agentId": "qe-queen",
+      "agentType": "coordinator",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "queen",
+        "swarmId": "swarm-1769383956433",
+        "hiveMind": "hive-1769383956771-daglgv",
+        "capabilities": [
+          "quality",
+          "testing",
+          "validation",
+          "learning"
+        ],
+        "model": "opus"
+      },
+      "createdAt": "2026-01-25T23:32:53.490Z",
+      "domain": "quality-engineering",
+      "model": "opus",
+      "modelRoutedBy": "explicit"
+    }
+  },
+  "version": "3.0.0"
+}

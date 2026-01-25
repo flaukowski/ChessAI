@@ -1,0 +1,560 @@
+{
+  "entries": {
+    "codebase-architecture": {
+      "key": "codebase-architecture",
+      "value": {
+        "domain": "audio-dsp-platform",
+        "stack": {
+          "frontend": "React+TypeScript+PWA",
+          "backend": "Express+TypeScript",
+          "dsp": "WebAudioAPI",
+          "database": "Drizzle ORM"
+        },
+        "core-modules": {
+          "audio-engine": "client/src/lib/dsp/audio-engine.ts",
+          "effects": [
+            "echo",
+            "flanger",
+            "phaser"
+          ],
+          "server-entry": "server/index.ts"
+        },
+        "security": [
+          "helmet",
+          "cors",
+          "csrf",
+          "session-cookies"
+        ],
+        "capabilities": [
+          "microphone-input",
+          "effects-chain",
+          "frequency-analysis",
+          "pwa-offline"
+        ]
+      },
+      "metadata": {
+        "source": "dual-queen-exploration",
+        "trajectory": "traj-1769383975912-on9jc"
+      },
+      "storedAt": "2026-01-25T23:33:24.026Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:33:24.026Z"
+    },
+    "deep-analysis-ai-effects": {
+      "key": "deep-analysis-ai-effects",
+      "value": {
+        "module": "ai-effects",
+        "capabilities": [
+          "conversational-effect-design",
+          "streaming-responses",
+          "user-preference-learning",
+          "effect-chain-suggestions"
+        ],
+        "effects": [
+          "eq",
+          "distortion",
+          "delay",
+          "chorus",
+          "compressor",
+          "basspurr",
+          "reverb"
+        ],
+        "ai-model": "gpt-4o",
+        "features": [
+          "conversation-history",
+          "preference-persistence",
+          "quick-suggest-endpoint"
+        ],
+        "evolution-opportunities": [
+          "real-time-audio-analysis",
+          "spectral-matching",
+          "genre-classification",
+          "collaborative-effect-chains"
+        ]
+      },
+      "metadata": {
+        "source": "flow-queen",
+        "trajectory": "traj-1769383975912-on9jc"
+      },
+      "storedAt": "2026-01-25T23:34:07.749Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:34:07.749Z"
+    },
+    "deep-analysis-presets": {
+      "key": "deep-analysis-presets",
+      "value": {
+        "module": "preset-manager",
+        "storage": "localStorage",
+        "features": [
+          "save",
+          "load",
+          "export-json",
+          "import-json",
+          "url-sharing",
+          "default-presets"
+        ],
+        "default-presets": [
+          "Clean Tone",
+          "Crunch",
+          "High Gain",
+          "Ambient",
+          "Vocal Polish"
+        ],
+        "evolution-opportunities": [
+          "cloud-sync",
+          "collaborative-presets",
+          "preset-morphing",
+          "ai-preset-generation"
+        ]
+      },
+      "metadata": {
+        "source": "flow-queen",
+        "trajectory": "traj-1769383975912-on9jc"
+      },
+      "storedAt": "2026-01-25T23:34:07.858Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:34:07.858Z"
+    },
+    "aqe/v3/queen/assessments/audio-dsp-quality-2026-01-25": {
+      "key": "aqe/v3/queen/assessments/audio-dsp-quality-2026-01-25",
+      "value": {
+        "assessmentId": "audio-dsp-quality-2026-01-25",
+        "timestamp": "2026-01-25T12:00:00Z",
+        "domain": "audio-dsp",
+        "coordinator": "qe-queen-coordinator",
+        "summary": {
+          "overallScore": 87.5,
+          "testCoverageScore": 82,
+          "algorithmCorrectnessScore": 90,
+          "securityScore": 88,
+          "performanceScore": 85,
+          "maintainabilityScore": 92
+        },
+        "testCoverage": {
+          "clientDspTests": {
+            "biquadFilter": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 20
+            },
+            "lfo": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 12
+            },
+            "delayLine": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 15
+            },
+            "flangerEffect": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 18
+            },
+            "echoEffect": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 14
+            },
+            "convolutionReverb": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 25
+            },
+            "graphicEq": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 20
+            },
+            "pedalboardEngine": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 45
+            },
+            "undoHistory": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 18
+            }
+          },
+          "serverTests": {
+            "encryption": {
+              "tested": true,
+              "quality": "excellent",
+              "testCount": 30
+            },
+            "auth": {
+              "tested": true,
+              "quality": "comprehensive",
+              "testCount": 75
+            }
+          },
+          "coverageGaps": [
+            {
+              "file": "phaser.ts",
+              "type": "missing-tests",
+              "priority": "high"
+            },
+            {
+              "file": "multiband-compressor.ts",
+              "type": "missing-tests",
+              "priority": "high"
+            },
+            {
+              "file": "remez-fir.ts",
+              "type": "missing-tests",
+              "priority": "medium"
+            },
+            {
+              "file": "window-functions.ts",
+              "type": "missing-tests",
+              "priority": "medium"
+            },
+            {
+              "file": "audio-adapter-manager.ts",
+              "type": "missing-tests",
+              "priority": "medium"
+            },
+            {
+              "file": "bluetooth-audio-manager.ts",
+              "type": "missing-tests",
+              "priority": "medium"
+            },
+            {
+              "file": "worklet-effects.ts",
+              "type": "missing-tests",
+              "priority": "medium"
+            },
+            {
+              "file": "effect-registry.ts",
+              "type": "missing-tests",
+              "priority": "low"
+            }
+          ]
+        },
+        "algorithmCorrectness": {
+          "strengths": [
+            "Biquad filter uses Direct Form II Transposed for numerical stability",
+            "BiquadFilterDF1 includes frequency pre-warping for high-frequency accuracy",
+            "LFO uses quarter-cycle table lookup with linear interpolation (efficient)",
+            "DelayLine uses power-of-2 buffer with bit-mask for fast circular access",
+            "Convolution reverb generates synthetic IR with early reflections and diffuse tail",
+            "Multiband compressor uses Linkwitz-Riley 4th-order crossovers (phase-coherent)"
+          ],
+          "opportunities": [
+            {
+              "file": "biquad.ts:117",
+              "issue": "Allpass b2 coefficient hardcoded to 1 instead of normalized",
+              "severity": "minor"
+            },
+            {
+              "file": "phaser.ts:74",
+              "issue": "fastPow2 approximation accuracy degrades for |x| > 1",
+              "severity": "minor"
+            },
+            {
+              "file": "echo.ts:47-55",
+              "issue": "LFO modulation parameter unused in process()",
+              "severity": "minor"
+            }
+          ]
+        },
+        "securityPatterns": {
+          "strengths": [
+            "AES-256-GCM encryption with 16-byte IV and 16-byte auth tag",
+            "Unique IV per encryption (cryptographic randomness)",
+            "HttpOnly cookies for auth tokens with SameSite=strict",
+            "Password hashing via bcrypt with configurable salt rounds",
+            "ZKP-based authentication flow (commitment, challenge, verify)",
+            "Account lockout after 5 failed attempts",
+            "Token rotation on refresh (single-use refresh tokens)",
+            "Input sanitization and email normalization",
+            "Audit logging for auth events"
+          ],
+          "improvements": [
+            {
+              "area": "rate-limiting",
+              "suggestion": "Add per-endpoint rate limiting with sliding window",
+              "priority": "medium"
+            },
+            {
+              "area": "csrf",
+              "suggestion": "Verify CSRF token implementation in forms",
+              "priority": "medium"
+            },
+            {
+              "area": "secrets",
+              "suggestion": "Ensure ENCRYPTION_MASTER_KEY is stored in secure vault",
+              "priority": "high"
+            }
+          ]
+        },
+        "performanceOptimizations": {
+          "currentOptimizations": [
+            {
+              "file": "phaser.ts",
+              "technique": "Filter coefficient update throttling (1Hz threshold)",
+              "impact": "high"
+            },
+            {
+              "file": "phaser.ts",
+              "technique": "fastPow2 approximation (~10x faster than Math.pow)",
+              "impact": "medium"
+            },
+            {
+              "file": "phaser.ts",
+              "technique": "Block processing with 32-sample update intervals",
+              "impact": "medium"
+            },
+            {
+              "file": "lfo.ts",
+              "technique": "Quarter sine table lookup with interpolation",
+              "impact": "medium"
+            },
+            {
+              "file": "delay-line.ts",
+              "technique": "Power-of-2 buffer with bitwise mask indexing",
+              "impact": "high"
+            },
+            {
+              "file": "convolution-reverb.ts",
+              "technique": "Pre-computed random buffer for noise generation",
+              "impact": "medium"
+            },
+            {
+              "file": "multiband-compressor.ts",
+              "technique": "ScriptProcessorNode with 512-sample buffer",
+              "impact": "medium"
+            }
+          ],
+          "opportunities": [
+            {
+              "file": "multiband-compressor.ts",
+              "suggestion": "Migrate from ScriptProcessorNode to AudioWorklet",
+              "impact": "high",
+              "reason": "ScriptProcessorNode is deprecated and runs on main thread"
+            },
+            {
+              "file": "biquad.ts",
+              "suggestion": "Add SIMD-friendly block processing with loop unrolling",
+              "impact": "medium"
+            },
+            {
+              "file": "convolution-reverb.ts",
+              "suggestion": "Consider IR caching to avoid regeneration on parameter change",
+              "impact": "medium"
+            },
+            {
+              "file": "effects/*.ts",
+              "suggestion": "Consider WebAssembly for DSP-intensive effects",
+              "impact": "high"
+            }
+          ]
+        },
+        "maintainability": {
+          "strengths": [
+            "Well-documented code with JSDoc comments",
+            "Consistent interface patterns (EffectNode interface)",
+            "TypeScript types for all parameters and state",
+            "Immutable parameter getters returning copies",
+            "Clean separation between DSP logic and Web Audio wrappers",
+            "Preset management via export/import JSON",
+            "Undo/redo system with debounced recording"
+          ],
+          "patterns": [
+            "Factory functions for Web Audio node creation",
+            "Class-based DSP processors with explicit reset methods",
+            "Parameter clamping at setter boundaries",
+            "Consistent naming: setParams, getParams, process, processBlock, reset"
+          ]
+        }
+      },
+      "metadata": {
+        "domain": "quality-assessment",
+        "scope": "audio-dsp",
+        "version": "v3"
+      },
+      "storedAt": "2026-01-25T23:34:53.318Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:34:53.318Z"
+    },
+    "aqe/learning/fleet-patterns/dsp-testing-patterns": {
+      "key": "aqe/learning/fleet-patterns/dsp-testing-patterns",
+      "value": {
+        "patternId": "dsp-testing-patterns",
+        "timestamp": "2026-01-25T12:00:00Z",
+        "domain": "test-generation",
+        "patterns": [
+          {
+            "name": "frequency-response-testing",
+            "description": "Test filter response by measuring attenuation at specific frequencies above/below cutoff",
+            "applicability": "biquad, crossover, eq filters",
+            "example": "Generate sine wave, process through filter, measure RMS power ratio"
+          },
+          {
+            "name": "impulse-response-testing",
+            "description": "Apply impulse to delay-based effects and verify decay characteristics",
+            "applicability": "echo, reverb, flanger, phaser",
+            "example": "Input impulse [1,0,0,...], verify delayed copies appear at expected positions"
+          },
+          {
+            "name": "lfo-cycle-verification",
+            "description": "Count zero-crossings over known time period to verify oscillator frequency",
+            "applicability": "lfo, modulated effects",
+            "example": "Run for 1 second at 10Hz, expect ~10 positive-to-negative crossings"
+          },
+          {
+            "name": "parameter-boundary-testing",
+            "description": "Test parameter clamping at min/max boundaries",
+            "applicability": "all effects",
+            "example": "Set gain to 150%, verify clamped to 100%"
+          },
+          {
+            "name": "block-vs-sample-consistency",
+            "description": "Verify processBlock produces identical output to sample-by-sample processing",
+            "applicability": "all DSP processors",
+            "example": "Process same input both ways, expect floating-point equality"
+          },
+          {
+            "name": "audio-context-mocking",
+            "description": "Mock Web Audio API nodes for unit testing without browser",
+            "applicability": "Web Audio wrapper functions",
+            "example": "Create mock AudioContext with spy methods for createGain, createDelay etc"
+          }
+        ],
+        "antiPatterns": [
+          {
+            "name": "absolute-value-expectations",
+            "description": "Avoid expecting exact floating-point values in DSP tests",
+            "mitigation": "Use toBeCloseTo or relative tolerance"
+          },
+          {
+            "name": "timing-dependent-tests",
+            "description": "Tests that depend on real time progression are flaky",
+            "mitigation": "Use fake timers and sample-based measurements"
+          }
+        ]
+      },
+      "metadata": {
+        "domain": "learning",
+        "scope": "test-patterns",
+        "version": "v3"
+      },
+      "storedAt": "2026-01-25T23:35:05.928Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:35:05.928Z"
+    },
+    "complete-architecture-synthesis": {
+      "key": "complete-architecture-synthesis",
+      "value": {
+        "platform": "AudioNoise Web",
+        "sophistication": "production-grade",
+        "core-strengths": {
+          "dsp": [
+            "biquad-df1-df2t",
+            "remez-fir-design",
+            "pedalboard-crossfade",
+            "4-stage-allpass-phaser",
+            "lfo-modulation"
+          ],
+          "security": [
+            "zkp-authentication",
+            "audit-logging",
+            "csrf-protection",
+            "account-lockout"
+          ],
+          "collaboration": [
+            "rbac-workspaces",
+            "shared-recordings",
+            "preset-sharing"
+          ],
+          "ai": [
+            "gpt4o-effect-suggestions",
+            "conversation-history",
+            "user-preferences"
+          ]
+        },
+        "architecture": {
+          "frontend": "React+TypeScript+PWA",
+          "backend": "Express+Drizzle+PostgreSQL",
+          "audio": "WebAudioAPI+AudioWorklets",
+          "effects": [
+            "eq",
+            "distortion",
+            "delay",
+            "chorus",
+            "compressor",
+            "basspurr",
+            "reverb",
+            "echo",
+            "flanger",
+            "phaser"
+          ]
+        }
+      },
+      "metadata": {
+        "source": "dual-queen-synthesis",
+        "trajectory": "traj-1769383975912-on9jc"
+      },
+      "storedAt": "2026-01-25T23:35:06.084Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:35:06.084Z"
+    },
+    "dual-queen-final-synthesis": {
+      "key": "dual-queen-final-synthesis",
+      "value": {
+        "qe-queen": {
+          "quality-score": 87.5,
+          "test-coverage": "82%",
+          "critical-gaps": [
+            "phaser.test.ts",
+            "multiband-compressor.test.ts"
+          ],
+          "algorithm-correctness": 90,
+          "security": 88,
+          "maintainability": 92
+        },
+        "flow-queen": {
+          "evolution-paths": [
+            "spatial-audio-hrtf",
+            "webrtc-jam-sessions",
+            "ml-effects",
+            "preset-marketplace",
+            "mobile-pwa"
+          ],
+          "current-effects": 10,
+          "ai-integration": "gpt-4o",
+          "collaboration": "rbac-workspaces"
+        },
+        "recommended-evolutions": {
+          "immediate": [
+            "undo-redo-enhancement",
+            "convolution-reverb-ir-loading"
+          ],
+          "short-term": [
+            "spatial-audio-engine",
+            "expression-pedal-morphing"
+          ],
+          "medium-term": [
+            "webrtc-collaboration",
+            "ml-denoising"
+          ],
+          "long-term": [
+            "neural-amp-modeling",
+            "ir-marketplace"
+          ]
+        }
+      },
+      "metadata": {
+        "source": "dual-queen-synthesis",
+        "timestamp": "2026-01-25T23:36:30Z",
+        "trajectory": "complete"
+      },
+      "storedAt": "2026-01-25T23:37:10.662Z",
+      "accessCount": 0,
+      "lastAccessed": "2026-01-25T23:37:10.662Z"
+    }
+  },
+  "version": "3.0.0"
+}

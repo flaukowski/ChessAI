@@ -142,6 +142,84 @@
       },
       "createdAt": "2026-01-18T11:41:38.191Z",
       "domain": "hive-mind"
+    },
+    "flow-scout-1769383983561-cvjn": {
+      "agentId": "flow-scout-1769383983561-cvjn",
+      "agentType": "explorer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "scout",
+        "hiveRole": "scout"
+      },
+      "createdAt": "2026-01-25T23:33:03.561Z",
+      "domain": "hive-mind"
+    },
+    "flow-scout-1769383983561-uh4n": {
+      "agentId": "flow-scout-1769383983561-uh4n",
+      "agentType": "explorer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "scout",
+        "hiveRole": "scout"
+      },
+      "createdAt": "2026-01-25T23:33:03.561Z",
+      "domain": "hive-mind"
+    },
+    "flow-scout-1769383983561-9ip5": {
+      "agentId": "flow-scout-1769383983561-9ip5",
+      "agentType": "explorer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "scout",
+        "hiveRole": "scout"
+      },
+      "createdAt": "2026-01-25T23:33:03.561Z",
+      "domain": "hive-mind"
+    },
+    "qe-specialist-1769383983712-7jeh": {
+      "agentId": "qe-specialist-1769383983712-7jeh",
+      "agentType": "analyzer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-25T23:33:03.712Z",
+      "domain": "hive-mind"
+    },
+    "qe-specialist-1769383983712-etjv": {
+      "agentId": "qe-specialist-1769383983712-etjv",
+      "agentType": "analyzer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-25T23:33:03.712Z",
+      "domain": "hive-mind"
+    },
+    "qe-specialist-1769383983712-nl0e": {
+      "agentId": "qe-specialist-1769383983712-nl0e",
+      "agentType": "analyzer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "role": "specialist",
+        "hiveRole": "specialist"
+      },
+      "createdAt": "2026-01-25T23:33:03.712Z",
+      "domain": "hive-mind"
     }
   }
 }

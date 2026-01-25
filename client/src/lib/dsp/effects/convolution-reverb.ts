@@ -11,9 +11,21 @@
  * - Wet/dry mix control
  * - Early reflections simulation
  * - High-frequency damping for natural decay
+ * - Custom IR file loading (WAV, AIFF, FLAC)
  */
 
+import {
+  loadIRFromFile,
+  loadIRFromURL,
+  type LoadedIR,
+  type IRLoaderOptions,
+} from '../ir-loader';
+
 export type RoomSize = 'small' | 'medium' | 'large' | 'hall';
+
+export type IRSource =
+  | { type: 'generated'; roomSize: RoomSize; decay: number; damping: number }
+  | { type: 'custom'; source: string; duration: number };
 
 export interface ConvolutionReverbParams {
   wetDryMix: number;     // 0-1 (0 = dry, 1 = wet)
@@ -250,6 +262,8 @@ export interface ConvolutionReverbNode {
   preDelayNode: DelayNode;
   bypass: boolean;
   mix: number;
+  /** Current IR source information */
+  irSource: IRSource;
   setWetDryMix: (mix: number) => void;
   setPreDelay: (ms: number) => void;
   setDecay: (seconds: number) => void;
@@ -257,6 +271,16 @@ export interface ConvolutionReverbNode {
   setDamping: (damping: number) => void;
   setBypass: (bypass: boolean) => void;
   updateImpulseResponse: () => void;
+  /** Load a custom IR from a File */
+  loadIRFromFile: (file: File, options?: IRLoaderOptions) => Promise<LoadedIR>;
+  /** Load a custom IR from a URL */
+  loadIRFromURL: (url: string, options?: IRLoaderOptions) => Promise<LoadedIR>;
+  /** Load a custom IR from an AudioBuffer */
+  loadCustomIR: (buffer: AudioBuffer, sourceName?: string) => void;
+  /** Reset to generated IR based on current room settings */
+  resetToGeneratedIR: () => void;
+  /** Check if using a custom IR */
+  isUsingCustomIR: () => boolean;
   destroy: () => void;
 }
 
@@ -277,6 +301,12 @@ export function createConvolutionReverbNode(
   };
 
   let _bypass = false;
+  let _irSource: IRSource = {
+    type: 'generated',
+    roomSize: currentParams.roomSize,
+    decay: currentParams.decay,
+    damping: currentParams.damping,
+  };
 
   // Create nodes
   const input = context.createGain();
@@ -318,6 +348,12 @@ export function createConvolutionReverbNode(
       currentParams.roomSize,
       currentParams.damping
     );
+    _irSource = {
+      type: 'generated',
+      roomSize: currentParams.roomSize,
+      decay: currentParams.decay,
+      damping: currentParams.damping,
+    };
   };
 
   return {
@@ -332,6 +368,10 @@ export function createConvolutionReverbNode(
 
     get mix() {
       return currentParams.wetDryMix;
+    },
+
+    get irSource() {
+      return _irSource;
     },
 
     setWetDryMix(mix: number) {
@@ -377,6 +417,45 @@ export function createConvolutionReverbNode(
 
     updateImpulseResponse,
 
+    async loadIRFromFile(file: File, options?: IRLoaderOptions): Promise<LoadedIR> {
+      const ir = await loadIRFromFile(file, context, options);
+      convolver.buffer = ir.buffer;
+      _irSource = {
+        type: 'custom',
+        source: ir.source,
+        duration: ir.duration,
+      };
+      return ir;
+    },
+
+    async loadIRFromURL(url: string, options?: IRLoaderOptions): Promise<LoadedIR> {
+      const ir = await loadIRFromURL(url, context, options);
+      convolver.buffer = ir.buffer;
+      _irSource = {
+        type: 'custom',
+        source: ir.source,
+        duration: ir.duration,
+      };
+      return ir;
+    },
+
+    loadCustomIR(buffer: AudioBuffer, sourceName?: string) {
+      convolver.buffer = buffer;
+      _irSource = {
+        type: 'custom',
+        source: sourceName || 'custom-buffer',
+        duration: buffer.duration,
+      };
+    },
+
+    resetToGeneratedIR() {
+      updateImpulseResponse();
+    },
+
+    isUsingCustomIR() {
+      return _irSource.type === 'custom';
+    },
+
     destroy() {
       input.disconnect();
       output.disconnect();
@@ -398,6 +477,7 @@ export class ConvolutionReverbEffect {
   private _bypass: boolean = false;
   private _mix: number;
   private _params: ConvolutionReverbParams;
+  private _customIRSource: string | null = null;
 
   constructor(context: AudioContext) {
     this._context = context;
@@ -432,6 +512,21 @@ export class ConvolutionReverbEffect {
     return { ...this._params };
   }
 
+  /** Get current IR source information */
+  get irSource(): IRSource {
+    return this._node.irSource;
+  }
+
+  /** Check if using a custom IR */
+  get isCustomIR(): boolean {
+    return this._node.isUsingCustomIR();
+  }
+
+  /** Get custom IR source name if using custom IR */
+  get customIRSource(): string | null {
+    return this._customIRSource;
+  }
+
   setBypass(bypass: boolean): void {
     this._bypass = bypass;
     this._node.setBypass(bypass);
@@ -450,6 +545,9 @@ export class ConvolutionReverbEffect {
   setDecay(seconds: number): void {
     this._params.decay = Math.max(0.1, Math.min(10, seconds));
     this._node.setDecay(this._params.decay);
+    if (!this._node.isUsingCustomIR()) {
+      this._customIRSource = null;
+    }
   }
 
   setPreDelay(ms: number): void {
@@ -461,12 +559,16 @@ export class ConvolutionReverbEffect {
     if (['small', 'medium', 'large', 'hall'].includes(size)) {
       this._params.roomSize = size;
       this._node.setRoomSize(size);
+      this._customIRSource = null; // Reset to generated
     }
   }
 
   setDamping(damping: number): void {
     this._params.damping = Math.max(0, Math.min(1, damping));
     this._node.setDamping(this._params.damping);
+    if (!this._node.isUsingCustomIR()) {
+      this._customIRSource = null;
+    }
   }
 
   setAllParams(params: Partial<ConvolutionReverbParams & { mix?: number }>): void {
@@ -477,6 +579,47 @@ export class ConvolutionReverbEffect {
     if (params.preDelay !== undefined) this.setPreDelay(params.preDelay);
     if (params.roomSize !== undefined) this.setRoomSize(params.roomSize);
     if (params.damping !== undefined) this.setDamping(params.damping);
+  }
+
+  /**
+   * Load a custom impulse response from a File
+   * @param file - Audio file containing the IR (WAV, AIFF, etc.)
+   * @param options - Processing options (normalization, etc.)
+   */
+  async loadIRFromFile(file: File, options?: IRLoaderOptions): Promise<LoadedIR> {
+    const ir = await this._node.loadIRFromFile(file, options);
+    this._customIRSource = ir.source;
+    return ir;
+  }
+
+  /**
+   * Load a custom impulse response from a URL
+   * @param url - URL of the audio file
+   * @param options - Processing options (normalization, etc.)
+   */
+  async loadIRFromURL(url: string, options?: IRLoaderOptions): Promise<LoadedIR> {
+    const ir = await this._node.loadIRFromURL(url, options);
+    this._customIRSource = ir.source;
+    return ir;
+  }
+
+  /**
+   * Load a custom impulse response from an AudioBuffer
+   * @param buffer - The AudioBuffer containing the IR
+   * @param sourceName - Optional name for the source
+   */
+  loadCustomIR(buffer: AudioBuffer, sourceName?: string): void {
+    this._node.loadCustomIR(buffer, sourceName);
+    this._customIRSource = sourceName || 'custom';
+  }
+
+  /**
+   * Reset to using a synthetically generated IR
+   * based on current room size, decay, and damping settings
+   */
+  resetToGeneratedIR(): void {
+    this._node.resetToGeneratedIR();
+    this._customIRSource = null;
   }
 
   destroy(): void {
