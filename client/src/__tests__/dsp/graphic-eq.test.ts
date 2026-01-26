@@ -56,7 +56,7 @@ const createMockAudioContext = () => {
   } as unknown as AudioContext;
 };
 
-describe.skip('GraphicEQEffect - Implementation Pending', () => {
+describe('GraphicEQEffect', () => {
   let audioContext: AudioContext;
 
   beforeEach(() => {
