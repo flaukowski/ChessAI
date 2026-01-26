@@ -399,9 +399,10 @@ export default function Studio() {
       action: handleSavePreset,
     });
 
-    // Navigation shortcuts
+    // Navigation shortcuts (Alt+Arrow to allow normal scrolling with plain arrows)
     registerShortcut({
       key: 'ArrowUp',
+      alt: true,
       description: 'Select previous effect',
       category: 'navigation',
       action: handleNavigateUp,
@@ -409,6 +410,7 @@ export default function Studio() {
 
     registerShortcut({
       key: 'ArrowDown',
+      alt: true,
       description: 'Select next effect',
       category: 'navigation',
       action: handleNavigateDown,
