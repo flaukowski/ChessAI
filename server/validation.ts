@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import crypto from 'crypto';
 
 // RFC 5322 compliant email regex (simplified but covers most cases)
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -203,7 +204,6 @@ export function hashIpAddress(ipAddress: string | undefined | null): string {
   if (!ipAddress) {
     return 'unknown';
   }
-  const crypto = require('crypto');
   // Use a salt to prevent rainbow table attacks
   // In production, this should come from environment variable
   const salt = process.env.IP_HASH_SALT || 'audionoise-ip-salt-v1';
