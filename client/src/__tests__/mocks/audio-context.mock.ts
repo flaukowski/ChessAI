@@ -218,6 +218,20 @@ export class MockAudioContext {
   createAnalyser = vi.fn(() => new MockAnalyserNode(this));
   createConvolver = vi.fn(() => new MockConvolverNode(this));
   createMediaStreamSource = vi.fn((stream: MediaStream) => new MockMediaStreamAudioSourceNode(this, { mediaStream: stream }));
+  createMediaElementSource = vi.fn((element: HTMLMediaElement) => ({
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    mediaElement: element,
+    context: this,
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    channelCount: 2,
+    channelCountMode: 'max',
+    channelInterpretation: 'speakers',
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn().mockReturnValue(true),
+  }));
   createBuffer = vi.fn((numberOfChannels: number, length: number, sampleRate: number) => ({
     numberOfChannels,
     length,
