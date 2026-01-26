@@ -64,9 +64,21 @@ export class PhaserEffect {
   }
 
   private fastPow2(x: number): number {
-    // Fast approximation of 2^x for audio using bit manipulation
+    // Fast approximation of 2^x for audio
     // ~10x faster than Math.pow for audio-range values
     if (x === 0) return 1;
+
+    // Handle negative exponents properly (bit shift doesn't work for negatives)
+    if (x < 0) {
+      const xi = Math.floor(x);
+      const xf = x - xi;
+      // 2^xi for negative integer = 1 / 2^|xi|
+      const intPart = 1 / (1 << -xi);
+      // Linear interpolation for fractional: 2^xf ≈ 1 + 0.693*xf (good for |xf| < 1)
+      const fracApprox = 1 + 0.6931471805599453 * xf;
+      return intPart * fracApprox;
+    }
+
     const xi = x | 0; // Integer part
     const xf = x - xi; // Fractional part
     // Linear interpolation for fractional: 2^xf ≈ 1 + 0.693*xf (good for |xf| < 1)

@@ -33,12 +33,12 @@ vi.mock('../../lib/dsp/worklet-effects', () => ({
     };
     return mockNode;
   }),
-  LevelMeter: vi.fn().mockImplementation((context) => ({
-    input: new MockGainNode(context),
-    output: new MockGainNode(context),
-    onLevels: vi.fn(),
-    destroy: vi.fn(),
-  })),
+  LevelMeter: vi.fn().mockImplementation(function(this: any, context: any) {
+    this.input = new MockGainNode(context);
+    this.output = new MockGainNode(context);
+    this.onLevels = vi.fn();
+    this.destroy = vi.fn();
+  }),
   defaultWorkletParams: {
     eq: { lowGain: 0, lowFreq: 320, midGain: 0, midFreq: 1000, midQ: 1, highGain: 0, highFreq: 3200, mix: 1 },
     distortion: { drive: 0.5, tone: 0.5, mode: 0, level: 0.5, mix: 1 },

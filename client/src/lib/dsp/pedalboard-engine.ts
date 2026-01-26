@@ -805,6 +805,7 @@ export class PedalboardEngine {
     }
 
     this.state.isInitialized = false;
+    this.state.effects = [];
     this.isGraphBuilt = false;
     this.activeChain = 'A';
   }
