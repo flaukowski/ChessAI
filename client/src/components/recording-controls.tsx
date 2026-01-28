@@ -78,6 +78,75 @@ export const RecordingControls = memo(function RecordingControls({
     }
   }, [stopRecording, state.duration]);
 
+  // Convert audio blob to WAV format for universal browser compatibility
+  const convertToWav = useCallback(async (blob: Blob): Promise<Blob> => {
+    // Create an audio context to decode the blob
+    const audioContext = new AudioContext();
+    const arrayBuffer = await blob.arrayBuffer();
+    
+    try {
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Encode to WAV
+      const numChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const length = audioBuffer.length;
+      
+      // Interleave channels
+      const interleaved = new Float32Array(length * numChannels);
+      for (let channel = 0; channel < numChannels; channel++) {
+        const channelData = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+          interleaved[i * numChannels + channel] = channelData[i];
+        }
+      }
+      
+      // Convert to 16-bit PCM
+      const pcmData = new Int16Array(interleaved.length);
+      for (let i = 0; i < interleaved.length; i++) {
+        const s = Math.max(-1, Math.min(1, interleaved[i]));
+        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      
+      // Create WAV file
+      const wavBuffer = new ArrayBuffer(44 + pcmData.length * 2);
+      const view = new DataView(wavBuffer);
+      
+      // WAV header
+      const writeString = (offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
+      };
+      
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + pcmData.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true); // fmt chunk size
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * numChannels * 2, true); // byte rate
+      view.setUint16(32, numChannels * 2, true); // block align
+      view.setUint16(34, 16, true); // bits per sample
+      writeString(36, 'data');
+      view.setUint32(40, pcmData.length * 2, true);
+      
+      // Write PCM data
+      const pcmOffset = 44;
+      for (let i = 0; i < pcmData.length; i++) {
+        view.setInt16(pcmOffset + i * 2, pcmData[i], true);
+      }
+      
+      await audioContext.close();
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    } catch (error) {
+      await audioContext.close();
+      throw error;
+    }
+  }, []);
+
   const handleSaveRecording = useCallback(async () => {
     if (!pendingBlob || !title.trim()) return;
 
@@ -85,17 +154,31 @@ export const RecordingControls = memo(function RecordingControls({
     setSaveError(null);
 
     try {
-      // Convert blob to base64
-      const audioData = await blobToBase64(pendingBlob);
-
-      // Determine format from mime type
-      const mimeType = pendingBlob.type;
+      // Convert to WAV for universal browser compatibility
+      let audioBlob = pendingBlob;
       let format = 'wav';
-      if (mimeType.includes('webm') || mimeType.includes('ogg')) {
-        format = 'ogg';
+      
+      // Check if the original format needs conversion
+      const mimeType = pendingBlob.type;
+      if (mimeType.includes('webm') || mimeType.includes('ogg') || mimeType.includes('opus')) {
+        try {
+          audioBlob = await convertToWav(pendingBlob);
+        } catch (conversionError) {
+          console.warn('WAV conversion failed, using original format:', conversionError);
+          // Fall back to original format if conversion fails
+          if (mimeType.includes('ogg')) {
+            format = 'ogg';
+          } else if (mimeType.includes('webm')) {
+            format = 'ogg'; // Save as ogg since server expects ogg for webm
+          }
+          audioBlob = pendingBlob;
+        }
       } else if (mimeType.includes('mp4')) {
         format = 'mp3';
       }
+
+      // Convert blob to base64
+      const audioData = await blobToBase64(audioBlob);
 
       // Create effect chain snapshot
       const effectChainSnapshot = effectChain.map(effect => ({
