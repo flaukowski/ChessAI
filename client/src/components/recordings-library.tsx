@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, Trash2, Globe, Lock, MoreVertical, Edit2, Share2, Copy, Check,
-  Music, Clock, Calendar, Loader2, RefreshCw, Search, Download, Upload, FileAudio
+  Music, Clock, Calendar, Loader2, RefreshCw, Search, Download, Upload, FileAudio, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,6 +115,9 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
     fetchRecordings();
   }, [fetchRecordings]);
 
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+
   const handlePlay = useCallback((recording: Recording) => {
     if (playingId === recording.id) {
       // Pause
@@ -126,24 +129,52 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
         // Stop any currently playing audio first
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
+        setPlaybackError(null);
+        setIsLoadingAudio(true);
         
         // Set new source and wait for it to load before playing
         audioRef.current.src = recording.fileUrl;
-        audioRef.current.load();
         
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setPlayingId(recording.id);
-              // Track play count
-              fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
-            })
-            .catch((error) => {
-              console.error('Playback failed:', error);
-              setPlayingId(null);
-            });
-        }
+        // Add load event handler
+        const onCanPlay = () => {
+          setIsLoadingAudio(false);
+          const playPromise = audioRef.current?.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                setPlayingId(recording.id);
+                // Track play count
+                fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
+              })
+              .catch((error) => {
+                console.error('Playback failed:', error);
+                setPlaybackError(`Playback failed: ${error.message || 'Unknown error'}`);
+                setPlayingId(null);
+              });
+          }
+          audioRef.current?.removeEventListener('canplay', onCanPlay);
+        };
+        
+        const onError = (e: Event) => {
+          setIsLoadingAudio(false);
+          const audio = e.target as HTMLAudioElement;
+          const errorCode = audio.error?.code;
+          const errorMessages: Record<number, string> = {
+            1: 'Playback was aborted',
+            2: 'Network error while loading audio',
+            3: 'Audio decoding failed - file may be corrupted',
+            4: 'Audio format not supported by browser',
+          };
+          const errorMsg = errorMessages[errorCode || 0] || 'Failed to load audio file';
+          console.error('Audio load error:', errorMsg, 'for file:', recording.fileUrl);
+          setPlaybackError(errorMsg);
+          setPlayingId(null);
+          audioRef.current?.removeEventListener('error', onError);
+        };
+        
+        audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
+        audioRef.current.addEventListener('error', onError, { once: true });
+        audioRef.current.load();
       }
     }
   }, [playingId]);
@@ -315,8 +346,10 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
       {/* Hidden audio element for playback */}
       <audio
         ref={audioRef}
-        onEnded={() => setPlayingId(null)}
-        onError={() => setPlayingId(null)}
+        onEnded={() => {
+          setPlayingId(null);
+          setIsLoadingAudio(false);
+        }}
       />
 
       <Card className={cn("bg-card/50 backdrop-blur", className)}>
@@ -340,6 +373,22 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
             />
           </div>
         </CardHeader>
+
+        {/* Playback error display */}
+        {playbackError && (
+          <div className="mx-6 mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-center justify-between">
+            <span className="text-destructive text-sm">{playbackError}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-destructive"
+              onClick={() => setPlaybackError(null)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -388,8 +437,11 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
                           size="icon"
                           className="h-10 w-10 shrink-0"
                           onClick={() => handlePlay(recording)}
+                          disabled={isLoadingAudio && playingId !== recording.id}
                         >
-                          {playingId === recording.id ? (
+                          {isLoadingAudio && playingId !== recording.id && audioRef.current?.src.includes(recording.fileUrl.split('/').pop() || '') ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : playingId === recording.id ? (
                             <Pause className="w-5 h-5" />
                           ) : (
                             <Play className="w-5 h-5" />
