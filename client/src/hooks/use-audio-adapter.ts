@@ -57,6 +57,8 @@ export interface UseAudioAdapterReturn extends AudioAdapterState {
   setChannelMute: (channelId: string, muted: boolean) => void;
   setChannelSolo: (channelId: string, solo: boolean) => void;
   getChannelLevels: (channelId: string) => { peak: number; rms: number };
+  setLatencyCompensation: (channelId: string, latencyMs: number) => void;
+  getLatencyCompensation: (channelId: string) => number;
 
   // Presets
   applyPreset: (channelId: string, presetId: string) => boolean;
@@ -392,6 +394,15 @@ export function useAudioAdapter(): UseAudioAdapterReturn {
     };
   }, [stopLevelMetering]);
 
+  const setLatencyCompensation = useCallback((channelId: string, latencyMs: number) => {
+    audioAdapterManager.setLatencyCompensation(channelId, latencyMs);
+    updateState();
+  }, [updateState]);
+
+  const getLatencyCompensation = useCallback((channelId: string) => {
+    return audioAdapterManager.getLatencyCompensation(channelId);
+  }, []);
+
   return {
     ...state,
     channelLevels,
@@ -408,6 +419,8 @@ export function useAudioAdapter(): UseAudioAdapterReturn {
     setChannelMute,
     setChannelSolo,
     getChannelLevels,
+    setLatencyCompensation,
+    getLatencyCompensation,
     applyPreset,
     getPresets,
     getPreset,

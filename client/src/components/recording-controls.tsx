@@ -102,12 +102,12 @@ export const RecordingControls = memo(function RecordingControls({
         params: effect.params,
       }));
 
-      const response = await fetch('/api/v1/recordings/upload', {
+      const { authFetch } = await import('@/lib/space-child-auth');
+      const response = await authFetch('/api/v1/recordings/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({
           audioData,
           format,

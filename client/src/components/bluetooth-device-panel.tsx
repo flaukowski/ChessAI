@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 import {
   Bluetooth,
   BluetoothConnected,
@@ -18,6 +20,7 @@ import {
   Volume2,
   VolumeX,
   Headphones,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BluetoothAudioDevice, AudioChannel } from "@/lib/dsp/bluetooth-audio-manager";
@@ -33,6 +36,7 @@ interface BluetoothDevicePanelProps {
   onCreateOutputChannel: (deviceId: string, name?: string) => Promise<AudioChannel | null>;
   onRemoveChannel: (channelId: string) => void;
   onSetChannelMute: (channelId: string, muted: boolean) => void;
+  onSetLatencyCompensation?: (channelId: string, latencyMs: number) => void;
   className?: string;
 }
 
@@ -47,6 +51,7 @@ export function BluetoothDevicePanel({
   onCreateOutputChannel,
   onRemoveChannel,
   onSetChannelMute,
+  onSetLatencyCompensation,
   className,
 }: BluetoothDevicePanelProps) {
   const [creatingChannel, setCreatingChannel] = useState<string | null>(null);
@@ -210,6 +215,7 @@ export function BluetoothDevicePanel({
                   channel={channel}
                   onRemove={() => onRemoveChannel(channel.id)}
                   onToggleMute={() => onSetChannelMute(channel.id, !channel.muted)}
+                  onSetLatencyCompensation={onSetLatencyCompensation ? (latencyMs) => onSetLatencyCompensation(channel.id, latencyMs) : undefined}
                 />
               ))}
               {outputChannels.map((channel) => (
@@ -284,51 +290,86 @@ interface ChannelItemProps {
   channel: AudioChannel;
   onRemove: () => void;
   onToggleMute: () => void;
+  onSetLatencyCompensation?: (latencyMs: number) => void;
 }
 
-function ChannelItem({ channel, onRemove, onToggleMute }: ChannelItemProps) {
+function ChannelItem({ channel, onRemove, onToggleMute, onSetLatencyCompensation }: ChannelItemProps) {
+  const [showLatency, setShowLatency] = useState(false);
+  
   return (
     <div
-      className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50"
+      className="p-2 rounded-md hover:bg-muted/50"
       style={{ borderLeft: `3px solid ${channel.color}` }}
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        {channel.type === "input" ? (
-          <Mic className="w-3 h-3 flex-shrink-0" style={{ color: channel.color }} />
-        ) : (
-          <Speaker className="w-3 h-3 flex-shrink-0" style={{ color: channel.color }} />
-        )}
-        <span className="text-xs truncate">{channel.name}</span>
-        <Badge
-          variant="outline"
-          className="text-[10px] px-1 py-0 h-4"
-          style={{ borderColor: channel.color, color: channel.color }}
-        >
-          {channel.type === "input" ? "IN" : "OUT"}
-        </Badge>
-      </div>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={onToggleMute}
-        >
-          {channel.muted ? (
-            <VolumeX className="w-3 h-3 text-red-500" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {channel.type === "input" ? (
+            <Mic className="w-3 h-3 flex-shrink-0" style={{ color: channel.color }} />
           ) : (
-            <Volume2 className="w-3 h-3" />
+            <Speaker className="w-3 h-3 flex-shrink-0" style={{ color: channel.color }} />
           )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-destructive hover:text-destructive"
-          onClick={onRemove}
-        >
-          <Trash2 className="w-3 h-3" />
-        </Button>
+          <span className="text-xs truncate">{channel.name}</span>
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1 py-0 h-4"
+            style={{ borderColor: channel.color, color: channel.color }}
+          >
+            {channel.type === "input" ? "IN" : "OUT"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1">
+          {channel.type === "input" && onSetLatencyCompensation && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-6 w-6", showLatency && "bg-muted")}
+              onClick={() => setShowLatency(!showLatency)}
+              title="Latency compensation"
+            >
+              <Timer className="w-3 h-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onToggleMute}
+          >
+            {channel.muted ? (
+              <VolumeX className="w-3 h-3 text-red-500" />
+            ) : (
+              <Volume2 className="w-3 h-3" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-destructive hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
       </div>
+      {showLatency && channel.type === "input" && onSetLatencyCompensation && (
+        <div className="mt-2 pt-2 border-t border-border/50">
+          <Label className="text-[10px] text-muted-foreground flex items-center gap-1 mb-1">
+            <Timer className="w-3 h-3" />
+            Bluetooth Latency Compensation: {channel.latencyCompensationMs}ms
+          </Label>
+          <Slider
+            value={[channel.latencyCompensationMs]}
+            onValueChange={(value) => onSetLatencyCompensation(value[0])}
+            min={0}
+            max={200}
+            step={5}
+            className="w-full"
+          />
+          <p className="text-[9px] text-muted-foreground mt-1">
+            Add delay to sync mic with Bluetooth headphones. Try 30-80ms for typical BT latency.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

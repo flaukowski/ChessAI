@@ -86,6 +86,7 @@ interface AudioAdapterPanelProps {
   onCreateOutputChannel: (deviceId: string, name?: string) => Promise<AdapterAudioChannel | null>;
   onRemoveChannel: (channelId: string) => void;
   onSetChannelMute: (channelId: string, muted: boolean) => void;
+  onSetLatencyCompensation?: (channelId: string, latencyMs: number) => void;
   onApplyPreset?: (channelId: string, presetId: string) => void;
   onSetGlobalOutputMute?: (muted: boolean) => void;
   onSetGlobalInputMute?: (muted: boolean) => void;
@@ -110,6 +111,7 @@ export function AudioAdapterPanel({
   onCreateOutputChannel,
   onRemoveChannel,
   onSetChannelMute,
+  onSetLatencyCompensation,
   onApplyPreset,
   onSetGlobalOutputMute,
   onSetGlobalInputMute,

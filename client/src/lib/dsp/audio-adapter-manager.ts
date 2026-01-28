@@ -29,11 +29,13 @@ export interface AdapterAudioChannel {
   pan: number;
   muted: boolean;
   solo: boolean;
+  latencyCompensationMs: number;
   stream?: MediaStream;
   sourceNode?: MediaStreamAudioSourceNode;
   gainNode?: GainNode;
   pannerNode?: StereoPannerNode;
   analyserNode?: AnalyserNode;
+  delayNode?: DelayNode;
 
   // Extended properties
   connectionType: AudioConnectionType;
@@ -227,10 +229,15 @@ export class AudioAdapterManager {
       const pannerNode = this.context.createStereoPanner();
       const analyserNode = this.context.createAnalyser();
       analyserNode.fftSize = 256;
+      
+      // Create delay node for latency compensation (max 500ms)
+      const delayNode = this.context.createDelay(0.5);
+      delayNode.delayTime.value = 0; // Start with no delay
 
-      // Connect: source -> gain -> panner -> analyser
+      // Connect: source -> gain -> delay -> panner -> analyser
       sourceNode.connect(gainNode);
-      gainNode.connect(pannerNode);
+      gainNode.connect(delayNode);
+      delayNode.connect(pannerNode);
       pannerNode.connect(analyserNode);
 
       // Get or auto-detect preset
@@ -260,11 +267,13 @@ export class AudioAdapterManager {
         pan: 0,
         muted: false,
         solo: false,
+        latencyCompensationMs: 0,
         stream,
         sourceNode,
         gainNode,
         pannerNode,
         analyserNode,
+        delayNode,
         connectionType: device.connectionType,
         instrumentPreset: preset,
         latencyMs: device.latencyMs,
@@ -339,6 +348,7 @@ export class AudioAdapterManager {
       pan: 0,
       muted: false,
       solo: false,
+      latencyCompensationMs: 0,
       gainNode,
       analyserNode,
       connectionType: device.connectionType,
@@ -481,6 +491,22 @@ export class AudioAdapterManager {
       channel.pannerNode.pan.setValueAtTime(clampedPan, this.context?.currentTime || 0);
       channel.pan = clampedPan;
     }
+  }
+
+  setLatencyCompensation(channelId: string, latencyMs: number): void {
+    const channel = this.inputChannels.get(channelId);
+    if (channel?.delayNode) {
+      // Clamp between 0 and 500ms
+      const clampedLatency = Math.max(0, Math.min(500, latencyMs));
+      const delaySec = clampedLatency / 1000;
+      channel.delayNode.delayTime.setValueAtTime(delaySec, this.context?.currentTime || 0);
+      channel.latencyCompensationMs = clampedLatency;
+    }
+  }
+
+  getLatencyCompensation(channelId: string): number {
+    const channel = this.inputChannels.get(channelId);
+    return channel?.latencyCompensationMs || 0;
   }
 
   setChannelMute(channelId: string, muted: boolean): void {

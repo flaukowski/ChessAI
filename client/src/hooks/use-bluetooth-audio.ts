@@ -280,5 +280,10 @@ export function useBluetoothAudio() {
       updateState();
     },
     isDeviceDisabled: (deviceId: string) => bluetoothAudioManager.isDeviceDisabled(deviceId),
+    setLatencyCompensation: (channelId: string, latencyMs: number) => {
+      bluetoothAudioManager.setLatencyCompensation(channelId, latencyMs);
+      updateState();
+    },
+    getLatencyCompensation: (channelId: string) => bluetoothAudioManager.getLatencyCompensation(channelId),
   };
 }

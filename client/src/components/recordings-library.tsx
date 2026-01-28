@@ -123,12 +123,27 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
     } else {
       // Play
       if (audioRef.current) {
+        // Stop any currently playing audio first
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        
+        // Set new source and wait for it to load before playing
         audioRef.current.src = recording.fileUrl;
-        audioRef.current.play();
-        setPlayingId(recording.id);
-
-        // Track play count
-        fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
+        audioRef.current.load();
+        
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setPlayingId(recording.id);
+              // Track play count
+              fetch(`/api/v1/recordings/${recording.id}/play`, { method: 'POST', credentials: 'include' });
+            })
+            .catch((error) => {
+              console.error('Playback failed:', error);
+              setPlayingId(null);
+            });
+        }
       }
     }
   }, [playingId]);
@@ -351,7 +366,7 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
             </div>
           ) : (
             <ScrollArea className="h-[400px]">
-              <div className="space-y-2">
+              <div className="space-y-2 pr-4">
                 <AnimatePresence>
                   {filteredRecordings.map((recording) => (
                     <motion.div
