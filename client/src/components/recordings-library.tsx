@@ -480,13 +480,13 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
                         </div>
 
                         {/* Actions */}
-                        <DropdownMenu>
+                        <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" sideOffset={5} className="z-50">
                             <DropdownMenuItem onClick={() => handleEdit(recording)}>
                               <Edit2 className="w-4 h-4 mr-2" />
                               Edit
