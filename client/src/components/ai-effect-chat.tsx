@@ -47,6 +47,7 @@ interface Conversation {
 interface AIEffectChatProps {
   onApplySuggestion: (type: string, params: Record<string, number>) => void;
   onApplyChain?: (suggestions: EffectSuggestion[]) => void;
+  onSignInClick?: () => void;
   className?: string;
 }
 
@@ -63,6 +64,7 @@ const QUICK_PROMPTS = [
 export const AIEffectChat = memo(function AIEffectChat({
   onApplySuggestion,
   onApplyChain,
+  onSignInClick,
   className,
 }: AIEffectChatProps) {
   const { user, isAuthenticated } = useSpaceChildAuth();
@@ -254,18 +256,32 @@ export const AIEffectChat = memo(function AIEffectChat({
       <Card className={cn("flex flex-col h-full", className)}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-500" />
+            <Sparkles className="w-4 h-4 text-purple-500/50" />
             AI Effect Designer
+            <Lock className="w-3 h-3 text-muted-foreground" />
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col items-center justify-center text-center">
-          <Lock className="w-10 h-10 text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground mb-2">
-            Sign in to use AI-powered effect suggestions
+          <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mb-4">
+            <Sparkles className="w-8 h-8 text-purple-400/60" />
+          </div>
+          <p className="text-sm font-medium text-foreground mb-2">
+            AI-Powered Effect Suggestions
           </p>
-          <p className="text-xs text-muted-foreground">
-            Get personalized effect chains based on your style preferences
+          <p className="text-xs text-muted-foreground mb-4 max-w-[200px]">
+            Describe the sound you want and get personalized effect chains instantly
           </p>
+          {onSignInClick && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSignInClick}
+              className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Sign in to Use AI
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -323,18 +339,22 @@ export const AIEffectChat = memo(function AIEffectChat({
             {messages.length === 0 && showQuickPrompts && (
               <div className="text-center py-4">
                 <Music className="w-10 h-10 mx-auto mb-3 text-purple-400 opacity-60" />
-                <p className="text-sm text-muted-foreground mb-4">
-                  Describe the sound you want to create
+                <p className="text-sm font-medium text-foreground mb-2">
+                  What sound are you looking for?
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Click a suggestion below or type your own description
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {QUICK_PROMPTS.map((prompt, idx) => (
                     <Badge
                       key={idx}
                       variant="outline"
-                      className="cursor-pointer hover:bg-purple-500/20 transition-colors text-xs"
+                      className="cursor-pointer hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs py-1.5 px-3"
                       onClick={() => handleQuickPrompt(prompt)}
                       data-testid={`badge-quick-prompt-${idx}`}
                     >
+                      <Sparkles className="w-3 h-3 mr-1 opacity-60" />
                       {prompt}
                     </Badge>
                   ))}
@@ -438,35 +458,45 @@ export const AIEffectChat = memo(function AIEffectChat({
         </ScrollArea>
 
         {/* Input Area */}
-        <div className="flex gap-2 mt-3 flex-shrink-0">
-          <Input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Describe your desired sound..."
-            disabled={isStreaming}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage(input);
-              }
-            }}
-            className="text-sm"
-            data-testid="input-chat-message"
-          />
-          <Button
-            size="sm"
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isStreaming}
-            className="px-3"
-            data-testid="button-send-message"
-          >
-            {isStreaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
+        <div className="space-y-2 mt-3 flex-shrink-0">
+          <div className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="e.g., 'warm vintage tone' or 'punchy bass'"
+              disabled={isStreaming}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage(input);
+                }
+              }}
+              className="text-sm"
+              data-testid="input-chat-message"
+            />
+            <Button
+              size="sm"
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isStreaming}
+              className={cn(
+                "px-3 transition-all",
+                input.trim() ? "bg-purple-500 hover:bg-purple-600" : ""
+              )}
+              data-testid="button-send-message"
+            >
+              {isStreaming ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+          {!input.trim() && messages.length === 0 && !showQuickPrompts && (
+            <p className="text-xs text-muted-foreground text-center">
+              Type a description or click a quick prompt above
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

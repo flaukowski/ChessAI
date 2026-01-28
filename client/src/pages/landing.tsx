@@ -114,20 +114,31 @@ export default function Landing() {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {!isAuthenticated ? (
-                <Button 
-                  size="lg" 
-                  onClick={() => { setAuthMode('login'); setAuthOpen(true); }}
-                  className="text-lg px-10 py-6"
-                >
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Sign In
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
+                <>
+                  <Button
+                    size="lg"
+                    onClick={() => navigate('/studio')}
+                    className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700"
+                  >
+                    <Waves className="w-5 h-5 mr-2" />
+                    Try Studio Free
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => { setAuthMode('login'); setAuthOpen(true); }}
+                    className="text-lg px-10 py-6 border-white/30 hover:bg-white/10"
+                  >
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    Sign In
+                  </Button>
+                </>
               ) : (
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   onClick={() => navigate('/studio')}
-                  className="text-lg px-10 py-6"
+                  className="text-lg px-10 py-6 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700"
                 >
                   <Waves className="w-5 h-5 mr-2" />
                   Open Studio
@@ -135,6 +146,12 @@ export default function Landing() {
                 </Button>
               )}
             </div>
+
+            {!isAuthenticated && (
+              <p className="mt-4 text-sm text-gray-400">
+                No account needed to try the effects. Sign in to save recordings and access AI features.
+              </p>
+            )}
             
             {isAuthenticated && user && (
               <p className="mt-6 text-gray-400">

@@ -25,6 +25,8 @@ import { MobileNav, MobileHeader } from '@/components/mobile-nav';
 import { RecordingControls } from '@/components/recording-controls';
 import { RecordingsLibrary } from '@/components/recordings-library';
 import { CommunityRecordings } from '@/components/community-recordings';
+import { SpaceChildAuthModal } from '@/components/auth';
+import { FeatureDiscoveryBanner } from '@/components/feature-discovery-banner';
 
 import { usePedalboard, type WorkletEffectType } from '@/hooks/use-pedalboard';
 import { useAudioAdapter } from '@/hooks/use-audio-adapter';
@@ -56,6 +58,7 @@ export default function Studio() {
 
   const [activeView, setActiveView] = useState<'dsp' | 'routing' | 'recordings'>('dsp');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -689,6 +692,12 @@ export default function Studio() {
 
   const renderDSPView = () => (
     <div className="flex flex-col gap-4 lg:gap-6">
+      {/* Feature Discovery Banner - shows for newly authenticated users */}
+      <FeatureDiscoveryBanner
+        isAuthenticated={isAuthenticated}
+        onNavigateToRecordings={() => setActiveView('recordings')}
+      />
+
       {/* Input and Visualizer Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         <div className="lg:col-span-1">
@@ -749,6 +758,7 @@ export default function Studio() {
         <AIEffectChat
           onApplySuggestion={handleAIChatSuggestion}
           onApplyChain={handleAIChatChainSuggestion}
+          onSignInClick={() => setAuthModalOpen(true)}
           className="min-h-[400px]"
         />
         <AIEffectSuggester
@@ -768,6 +778,7 @@ export default function Studio() {
         outputGain={outputGain}
         isAuthenticated={isAuthenticated}
         onNavigateToLibrary={() => setActiveView('recordings')}
+        onSignInClick={() => setAuthModalOpen(true)}
       />
 
       {/* Export Button */}
@@ -1158,6 +1169,12 @@ export default function Studio() {
       <KeyboardShortcutsDialog
         open={shortcutsDialogOpen}
         onOpenChange={setShortcutsDialogOpen}
+      />
+
+      {/* Auth Modal for unauthenticated users */}
+      <SpaceChildAuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
       />
     </div>
   );

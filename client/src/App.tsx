@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { KeyboardShortcutsProvider } from "@/hooks/use-keyboard-shortcuts";
+import { AuthProvider } from "@/contexts/auth-context";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -68,12 +69,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <KeyboardShortcutsProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </KeyboardShortcutsProvider>
+      <AuthProvider>
+        <KeyboardShortcutsProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </KeyboardShortcutsProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

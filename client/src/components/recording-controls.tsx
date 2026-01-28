@@ -5,7 +5,7 @@
 
 import { useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Circle, Square, Pause, Play, Save, X, Loader2, Library } from 'lucide-react';
+import { Circle, Square, Pause, Play, Save, X, Loader2, Library, Lock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +30,7 @@ interface RecordingControlsProps {
   outputGain: number;
   isAuthenticated: boolean;
   onNavigateToLibrary?: () => void;
+  onSignInClick?: () => void;
   className?: string;
 }
 
@@ -42,6 +43,7 @@ export const RecordingControls = memo(function RecordingControls({
   outputGain,
   isAuthenticated,
   onNavigateToLibrary,
+  onSignInClick,
   className,
 }: RecordingControlsProps) {
   const { state, startRecording, stopRecording, pauseRecording, resumeRecording, cancelRecording } = useAudioRecorder();
@@ -155,7 +157,44 @@ export const RecordingControls = memo(function RecordingControls({
   }, [cancelRecording]);
 
   if (!isAuthenticated) {
-    return null; // Don't show recording controls for non-authenticated users
+    return (
+      <Card className={cn("bg-card/50 backdrop-blur", className)}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Circle className="w-4 h-4 text-red-500/50" />
+            Recording
+            <Lock className="w-3 h-3 text-muted-foreground ml-1" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button
+                disabled
+                className="bg-red-500/30 text-white/50 cursor-not-allowed"
+              >
+                <Circle className="w-4 h-4 mr-2 fill-current" />
+                Start Recording
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Record and save your processed audio
+              </span>
+            </div>
+            {onSignInClick && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSignInClick}
+                className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign in to Record
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

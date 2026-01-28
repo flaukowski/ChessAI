@@ -77,6 +77,8 @@ import { VirtualKnob } from '@/components/ui/virtual-knob';
 import { LevelMeter, DualLevelMeter } from '@/components/level-meter';
 import { UndoRedoControls } from '@/components/undo-redo-controls';
 import { type PedalboardEffect, type WorkletEffectType } from '@/hooks/use-pedalboard';
+import { Badge } from '@/components/ui/badge';
+import { Sparkles } from 'lucide-react';
 
 // Effect configuration metadata
 const EFFECT_CONFIGS: Record<WorkletEffectType, {
@@ -84,6 +86,7 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
   icon: React.ReactNode;
   color: string;
   description: string;
+  isNew?: boolean;
   params: { key: string; label: string; min: number; max: number; step: number; unit?: string }[];
 }> = {
   eq: {
@@ -184,6 +187,7 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
     icon: <Waves className="w-4 h-4" />,
     color: 'from-cyan-500 to-blue-500',
     description: 'Algorithmic reverb for room simulation and spatial depth',
+    isNew: true,
     params: [
       { key: 'roomSize', label: 'Room Size', min: 0, max: 1, step: 0.05 },
       { key: 'damping', label: 'Damping', min: 0, max: 1, step: 0.05 },
@@ -198,6 +202,7 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
     icon: <Guitar className="w-4 h-4" />,
     color: 'from-red-600 to-orange-500',
     description: 'Octave-down subharmonic with filtered harmonic distortion',
+    isNew: true,
     params: [
       { key: 'subLevel', label: 'Sub', min: 0, max: 1, step: 0.05 },
       { key: 'oddLevel', label: 'Odd', min: 0, max: 1, step: 0.05 },
@@ -211,6 +216,7 @@ const EFFECT_CONFIGS: Record<WorkletEffectType, {
     icon: <VolumeX className="w-4 h-4" />,
     color: 'from-slate-500 to-gray-600',
     description: 'Noise gate for controlling dynamics and eliminating unwanted noise',
+    isNew: true,
     params: [
       { key: 'threshold', label: 'Threshold', min: -80, max: 0, step: 1, unit: 'dB' },
       { key: 'attack', label: 'Attack', min: 0.1, max: 20, step: 0.1, unit: 'ms' },
@@ -828,6 +834,11 @@ export const Pedalboard = memo(function Pedalboard({
                     <div className="flex items-center gap-2">
                       {config.icon}
                       <span>{config.label}</span>
+                      {config.isNew && (
+                        <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] bg-cyan-500/20 text-cyan-400 border-cyan-500/30">
+                          New
+                        </Badge>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
