@@ -414,8 +414,8 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
               )}
             </div>
           ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-2 pr-4">
+            <ScrollArea className="h-[400px] overflow-visible">
+              <div className="space-y-2 pr-6">
                 <AnimatePresence>
                   {filteredRecordings.map((recording) => (
                     <motion.div
@@ -430,7 +430,7 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
                           : "bg-background/50 border-border hover:border-muted-foreground/30"
                       )}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 overflow-visible">
                         {/* Play button */}
                         <Button
                           variant="ghost"
@@ -479,14 +479,20 @@ export function RecordingsLibrary({ onLoadRecording, className }: RecordingsLibr
                           </div>
                         </div>
 
-                        {/* Actions */}
+                        {/* Actions - Options dropdown */}
                         <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 px-2 shrink-0 flex items-center gap-1"
+                              data-testid={`button-recording-options-${recording.id}`}
+                            >
                               <MoreVertical className="w-4 h-4" />
+                              <span className="text-xs hidden sm:inline">Options</span>
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" sideOffset={5} className="z-50">
+                          <DropdownMenuContent align="end" sideOffset={5} className="z-[100]">
                             <DropdownMenuItem onClick={() => handleEdit(recording)}>
                               <Edit2 className="w-4 h-4 mr-2" />
                               Edit
