@@ -187,7 +187,7 @@ export default function Landing() {
             <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
             <a href="/support" className="hover:text-white transition-colors">Support</a>
             <a
-              href="https://etherscan.io/address/REDACTED_WALLET_ADDRESS"
+              href={`https://etherscan.io/address/${import.meta.env.VITE_DONATION_ETH_ADDRESS || ""}`}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-cyan-400 transition-colors"
